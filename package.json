@@ -2,6 +2,7 @@
   "name": "limit-starter",
   "version": "0.2.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "bin": {
     "limit": "src/cli.ts"

@@ -37,3 +37,7 @@ Hutch installs to `~/.hutch/bin`. Run `hutch electrobun sync` once after cloning
 - `~/Library/LaunchAgents/com.limit-starter.login.plist`: only when **Launch at login** is on
 
 If a CLI update changes the `/usage` text, the Claude check fails loudly. No start message is sent, and the menu bar shows `!`. Update `parseUsage` in `src/core/providers/claude.ts` and add the new output to `test/fixtures/`.
+
+## License
+
+[MIT](LICENSE)
