@@ -1,0 +1,20 @@
+{
+  "name": "limit-starter",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "limit": "src/cli.ts"
+  },
+  "scripts": {
+    "dev": "hutch run dev",
+    "build": "hutch run build",
+    "status": "bun src/cli.ts status",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.7.2"
+  }
+}

@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>limit-starter settings</title>
+    <link rel="stylesheet" href="index.css" />
+  </head>
+  <body>
+    <main id="app" hidden>
+      <header>
+        <h1>limit-starter</h1>
+        <p class="sub">Starts a new 5h session as soon as the old one resets.</p>
+      </header>
+
+      <section>
+        <h2>General</h2>
+        <label class="row">
+          <span>Auto-start 5h sessions<small>Send a short message when a 5h session has reset</small></span>
+          <input type="checkbox" class="switch" id="autoStart" />
+        </label>
+        <label class="row">
+          <span>Check every<small>Limit checks don't use any model</small></span>
+          <span class="inline"><input type="number" id="intervalMin" min="1" max="120" step="1" /> min</span>
+        </label>
+        <label class="row">
+          <span>Only between<small>Don't start 5h sessions outside these hours</small></span>
+          <input type="checkbox" class="switch" id="activeHoursOn" />
+        </label>
+        <div class="row sub-row" id="activeHoursRow">
+          <span></span>
+          <span class="inline"><input type="time" id="ahStart" /> – <input type="time" id="ahEnd" /></span>
+        </div>
+        <label class="row">
+          <span>Launch at login<small id="loginHint"></small></span>
+          <input type="checkbox" class="switch" id="launchAtLogin" />
+        </label>
+      </section>
+
+      <section data-provider="claude">
+        <h2><label class="inline"><input type="checkbox" class="switch" id="claude-enabled" /> Claude</label></h2>
+        <label class="row">
+          <span>Model<small>Aliases always use the newest model of that family</small></span>
+          <select id="claude-model"></select>
+        </label>
+        <div class="row sub-row custom-row" id="claude-custom-row">
+          <span></span>
+          <input type="text" id="claude-custom" placeholder="e.g. claude-haiku-4-5" spellcheck="false" />
+        </div>
+        <label class="row">
+          <span>CLI path</span>
+          <input type="text" id="claude-bin" spellcheck="false" />
+        </label>
+        <div class="row test-row">
+          <span class="test-result" id="claude-test-result"></span>
+          <button type="button" class="secondary" data-test="claude">Send test message</button>
+        </div>
+      </section>
+
+      <section data-provider="codex">
+        <h2><label class="inline"><input type="checkbox" class="switch" id="codex-enabled" /> Codex</label></h2>
+        <label class="row">
+          <span>Model<small id="codex-models-hint">Loading models from Codex…</small></span>
+          <span class="inline">
+            <select id="codex-model"></select>
+            <button type="button" class="icon" id="codex-refresh" title="Reload the model list from Codex">↻</button>
+          </span>
+        </label>
+        <div class="row sub-row custom-row" id="codex-custom-row">
+          <span></span>
+          <input type="text" id="codex-custom" placeholder="model id" spellcheck="false" />
+        </div>
+        <label class="row">
+          <span>Reasoning effort</span>
+          <select id="codex-effort">
+            <option value="minimal">minimal</option>
+            <option value="low">low</option>
+            <option value="medium">medium</option>
+            <option value="high">high</option>
+          </select>
+        </label>
+        <label class="row">
+          <span>CLI path</span>
+          <input type="text" id="codex-bin" spellcheck="false" />
+        </label>
+        <div class="row test-row">
+          <span class="test-result" id="codex-test-result"></span>
+          <button type="button" class="secondary" data-test="codex">Send test message</button>
+        </div>
+      </section>
+
+      <p class="note">A test message uses a tiny bit of your limit, and starts a 5h session if none is running.</p>
+
+      <footer>
+        <span id="status"></span>
+        <button type="button" class="secondary" id="close">Close</button>
+        <button type="button" class="primary" id="save">Save</button>
+      </footer>
+    </main>
+    <script src="index.js"></script>
+  </body>
+</html>
