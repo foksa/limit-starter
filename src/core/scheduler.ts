@@ -13,7 +13,18 @@ const FAILURE_NOTIFY_AFTER = 3;
  * Wait before confirming a start: right after a start, Codex's new window is
  * indistinguishable from its "no window" report (see IDLE_TOLERANCE_MS).
  */
-export const timing = { confirmDelayMs: 90_000 };
+export const timing = {
+  confirmDelayMs: 90_000,
+  /**
+   * How long after a reported reset time to check again. Codex reports exact seconds;
+   * Claude's /usage shows minutes only ("4:59pm" for a 17:00 reset), so it gets more
+   * room: checking early would send the start message into the old session.
+   */
+  resetGraceMs: { claude: 90_000, codex: 30_000 } as Record<Provider, number>,
+  /** Retry spacing when a session is still reported as running after its reset time. */
+  resetRetryMs: 60_000,
+};
+const MAX_RESET_RETRIES = 5;
 
 const BUSY = Symbol("busy");
 
@@ -124,18 +135,27 @@ export async function tickProvider(
 export class Scheduler {
   private busy = new Set<Provider>();
   private timer: ReturnType<typeof setInterval> | null = null;
+  private resetTimers = new Map<Provider, ReturnType<typeof setTimeout>>();
+  private resetRetries = new Map<Provider, number>();
 
   constructor(private onChange: () => void = () => {}) {}
 
   run() {
     if (this.timer) return;
-    void this.runDue();
     this.timer = setInterval(() => void this.runDue(), 60_000);
+    // The first runDue may skip providers checked recently (e.g. right after a restart),
+    // so re-arm reset checks from the saved snapshots.
+    const cfg = loadConfig();
+    const state = loadState();
+    for (const p of PROVIDERS) if (cfg[p].enabled) this.planResetCheck(p, state[p]?.lastSnapshot);
+    void this.runDue();
   }
 
   stop() {
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
+    for (const t of this.resetTimers.values()) clearTimeout(t);
+    this.resetTimers.clear();
   }
 
   isBusy(p: Provider) {
@@ -199,10 +219,51 @@ export class Scheduler {
         return await fn(st);
       } finally {
         saveProviderState(p, st);
+        this.planResetCheck(p, st.lastSnapshot);
       }
     } finally {
       this.busy.delete(p);
       this.onChange();
     }
+  }
+
+  /**
+   * Besides the regular interval, check once right after the running session's reset
+   * time, so the next session starts within seconds instead of up to an interval later.
+   * Only while the scheduler is running, so one-off CLI commands exit normally.
+   */
+  private planResetCheck(p: Provider, snap: Snapshot | undefined) {
+    if (!this.timer) return;
+    clearTimeout(this.resetTimers.get(p));
+    this.resetTimers.delete(p);
+    const w = snap?.fiveHour;
+    if (!w?.active || w.resetsAt === null) {
+      this.resetRetries.delete(p);
+      return;
+    }
+    let delay = w.resetsAt + timing.resetGraceMs[p] - Date.now();
+    if (delay <= 0) {
+      // Past its reset time but still reported as running: ask again shortly, a few
+      // times, then leave it to the regular interval.
+      const n = (this.resetRetries.get(p) ?? 0) + 1;
+      if (n > MAX_RESET_RETRIES) return;
+      this.resetRetries.set(p, n);
+      delay = timing.resetRetryMs;
+    } else {
+      this.resetRetries.delete(p);
+    }
+    this.resetTimers.set(
+      p,
+      setTimeout(() => void this.checkAtReset(p), delay),
+    );
+  }
+
+  private async checkAtReset(p: Provider) {
+    this.resetTimers.delete(p);
+    const cfg = loadConfig();
+    if (!cfg[p].enabled) return;
+    log({ provider: p, event: "reset-check", retry: this.resetRetries.get(p) ?? 0 });
+    // If a check is already running, its own completion plans the next reset check.
+    await this.withProvider(p, (st) => tickProvider(p, cfg, st, Date.now(), (s) => saveProviderState(p, s)));
   }
 }

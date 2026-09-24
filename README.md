@@ -2,6 +2,8 @@
 
 A macOS menu bar app, built with [Electrobun](https://framework.blackboard.sh/electrobun/), that watches the Claude and Codex 5-hour usage limits. When a 5h session has reset and is idle, it sends one short message to start the next one.
 
+Besides the regular check interval (10 min by default), it checks once more right after each running session's reported reset time: 30 s later for Codex, which reports exact seconds, and 90 s for Claude, whose `/usage` shows minutes only. That way the next session starts within about a minute of the reset.
+
 The menu bar shows the time left in each running 5h session, for example `C 4:30 · X 2:18`. It shows `–` when a session is idle, `…` while checking, and `!` after an error. The menu has details for each provider, **Check now**, **Start … 5h session now**, an **Auto-start** toggle, **Settings…**, and **Open log**.
 
 It uses only the official CLIs, run headless, with your subscription login. There are no direct API calls:

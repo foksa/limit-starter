@@ -5,7 +5,7 @@ import { defaultConfig, loadConfig, sanitizeConfig, saveConfig } from "../src/co
 import { CONFIG_FILE, HOME_DIR, PING_DIR, STATE_FILE } from "../src/core/paths";
 import { appServerRequest } from "../src/core/providers/codex";
 import { check, Scheduler, start, timing } from "../src/core/scheduler";
-import { loadState } from "../src/core/state";
+import { loadState, saveProviderState } from "../src/core/state";
 import type { Snapshot } from "../src/core/types";
 
 const idle: Snapshot = { fiveHour: { active: false, usedPct: 0, resetsAt: null }, weekly: null };
@@ -16,6 +16,8 @@ beforeEach(() => {
   rmSync(HOME_DIR, { recursive: true, force: true });
   saveConfig({ ...defaultConfig(), claude: { ...defaultConfig().claude, enabled: false } });
   timing.confirmDelayMs = 30;
+  timing.resetGraceMs = { claude: 20, codex: 20 };
+  timing.resetRetryMs = 20;
 });
 
 describe("config file", () => {
@@ -116,4 +118,69 @@ test("codex app-server runs even when the ping dir doesn't exist yet", async () 
   await expect(appServerRequest(fake, "account/rateLimits/read", undefined, 5_000)).rejects.toThrow(
     /exited without answering/,
   );
+});
+
+describe("check at reset time", () => {
+  test("starts the next session right after the reset, without waiting for the interval", async () => {
+    let checks = 0;
+    let starts = 0;
+    const resetsAt = Date.now() + 80;
+    check.codex = async () => {
+      checks++;
+      if (starts) return active; // after our start
+      return Date.now() < resetsAt ? { fiveHour: { active: true, usedPct: 50, resetsAt }, weekly: null } : idle;
+    };
+    start.codex = async () => (starts++, "ok");
+    const s = new Scheduler();
+    s.run(); // interval is 10 min, so only the reset timer can trigger the second check
+    await Bun.sleep(400);
+    s.stop();
+    expect(starts).toBe(1);
+    expect(checks).toBeGreaterThanOrEqual(3); // initial, at reset, confirm
+  });
+
+  test("retries when the old session is still reported after its reset time", async () => {
+    let calls = 0;
+    let starts = 0;
+    const resetsAt = Date.now() + 40;
+    check.codex = async () => {
+      calls++;
+      if (starts) return active;
+      // Server lags: keeps reporting the old session for the first two checks after the reset.
+      return calls <= 3 ? { fiveHour: { active: true, usedPct: 50, resetsAt }, weekly: null } : idle;
+    };
+    start.codex = async () => (starts++, "ok");
+    const s = new Scheduler();
+    s.run();
+    await Bun.sleep(500);
+    s.stop();
+    expect(starts).toBe(1);
+  });
+
+  test("a restart re-arms the reset check from the saved snapshot", async () => {
+    const resetsAt = Date.now() + 60;
+    // Checked just before the restart, so the regular interval isn't due for 10 minutes.
+    saveProviderState("codex", {
+      lastCheckAt: Date.now(),
+      lastSnapshot: { fiveHour: { active: true, usedPct: 50, resetsAt }, weekly: null },
+    });
+    let starts = 0;
+    check.codex = async () => (starts ? active : Date.now() < resetsAt ? active : idle);
+    start.codex = async () => (starts++, "ok");
+    const s = new Scheduler();
+    s.run();
+    await Bun.sleep(400);
+    s.stop();
+    expect(starts).toBe(1);
+  });
+
+  test("one-off commands don't leave timers behind", async () => {
+    check.codex = async () => ({ fiveHour: { active: true, usedPct: 5, resetsAt: Date.now() + 50 }, weekly: null });
+    let checks = 0;
+    const original = check.codex;
+    check.codex = async (c) => (checks++, original(c));
+    await new Scheduler().runDue(true); // not running: no reset timer
+    await Bun.sleep(200);
+    expect(checks).toBe(1);
+  });
 });
