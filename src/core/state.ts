@@ -1,6 +1,7 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync } from "fs";
+import { writeFileAtomic } from "./fsutil";
 import { HOME_DIR, LOG_FILE, STATE_FILE } from "./paths";
-import type { State } from "./types";
+import type { Provider, ProviderState, State } from "./types";
 
 export function loadState(): State {
   if (!existsSync(STATE_FILE)) return {};
@@ -12,8 +13,14 @@ export function loadState(): State {
 }
 
 export function saveState(state: State) {
-  mkdirSync(HOME_DIR, { recursive: true });
-  writeFileSync(STATE_FILE, JSON.stringify(state, null, 2) + "\n");
+  writeFileAtomic(STATE_FILE, JSON.stringify(state, null, 2) + "\n");
+}
+
+/** Persist one provider's state without clobbering the other's. */
+export function saveProviderState(p: Provider, st: ProviderState) {
+  const state = loadState();
+  state[p] = st;
+  saveState(state);
 }
 
 export function log(entry: Record<string, unknown>) {

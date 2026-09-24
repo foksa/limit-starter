@@ -43,7 +43,12 @@ switch (cmd) {
     }
     await new Scheduler().startNow(arg);
     const st = loadState()[arg];
-    console.log(st?.lastError ? `failed: ${st.lastError}` : `${LABEL[arg]}: ${fmtWindow(st?.lastSnapshot?.fiveHour ?? null)}`);
+    if (st?.lastError) {
+      console.error(`failed: ${st.lastError}`);
+      process.exitCode = 1;
+    } else {
+      console.log(`${LABEL[arg]}: ${fmtWindow(st?.lastSnapshot?.fiveHour ?? null)}`);
+    }
     break;
   }
   case "models": {

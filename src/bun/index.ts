@@ -6,7 +6,7 @@ import { notify, setNotifier } from "../core/notify";
 import { LOG_FILE } from "../core/paths";
 import { CLAUDE_MODELS } from "../core/providers/claude";
 import { listCodexModels } from "../core/providers/codex";
-import { LABEL, Scheduler, start } from "../core/scheduler";
+import { LABEL, Scheduler } from "../core/scheduler";
 import { loadState } from "../core/state";
 import { PROVIDERS, type Provider, type ProviderState } from "../core/types";
 import type { SettingsRPC } from "../shared/rpc";
@@ -156,7 +156,9 @@ const settingsRPC = BrowserView.defineRPC<SettingsRPC>({
       },
       testModel: async ({ provider, config }) => {
         try {
-          return { ok: true as const, reply: await start[provider](config) };
+          const reply = await scheduler.testModel(provider, config);
+          refreshTray();
+          return { ok: true as const, reply };
         } catch (err) {
           return { ok: false as const, error: err instanceof Error ? err.message : String(err) };
         }

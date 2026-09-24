@@ -1,3 +1,4 @@
+import { mkdirSync } from "fs";
 import type { Config } from "../config";
 import { cliEnv, describeFailure, run } from "../exec";
 import { PING_DIR } from "../paths";
@@ -45,6 +46,7 @@ export function parseRateLimits(result: { rateLimits: RateLimits }, now = Date.n
 
 /** One JSON-RPC request to a short-lived `codex app-server` over stdio. No model turn. */
 export async function appServerRequest<T>(bin: string, method: string, params?: object, timeoutMs = 30_000): Promise<T> {
+  mkdirSync(PING_DIR, { recursive: true });
   const proc = Bun.spawn([bin, "app-server"], { cwd: PING_DIR, env: cliEnv(bin), stdin: "pipe", stdout: "pipe", stderr: "ignore" });
   const send = (msg: object) => proc.stdin.write(JSON.stringify(msg) + "\n");
   send({ method: "initialize", id: 0, params: { clientInfo: { name: "limit-starter", version: "0.2.0" } } });

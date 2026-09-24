@@ -3,8 +3,8 @@ import { fmtTime } from "./format";
 import { notify } from "./notify";
 import { checkClaude, startClaude } from "./providers/claude";
 import { checkCodex, startCodex } from "./providers/codex";
-import { loadState, log, saveState } from "./state";
-import { PROVIDERS, type Provider, type ProviderState, type Snapshot, type State } from "./types";
+import { loadState, log, saveProviderState } from "./state";
+import { PROVIDERS, type Provider, type ProviderState, type Snapshot } from "./types";
 
 /** Don't send another start message within this long of the last one. */
 const START_COOLDOWN_MS = 30 * 60_000;
@@ -14,6 +14,8 @@ const FAILURE_NOTIFY_AFTER = 3;
  * indistinguishable from its "no window" report (see IDLE_TOLERANCE_MS).
  */
 export const timing = { confirmDelayMs: 90_000 };
+
+const BUSY = Symbol("busy");
 
 export const LABEL: Record<Provider, string> = { claude: "Claude", codex: "Codex" };
 
@@ -48,8 +50,25 @@ export function shouldStart(
   return { start: true, reason: "5h session idle" };
 }
 
-/** Check one provider and, if its window is idle, start a new one. Mutates `st`. */
-export async function tickProvider(p: Provider, cfg: Config, st: ProviderState, now = Date.now()) {
+/** Whether a snapshot shows a 5h session that's still running (unknown counts as not). */
+export function sessionActive(snap: Snapshot | undefined, now: number): boolean {
+  const w = snap?.fiveHour;
+  if (!w || !w.active) return false;
+  return w.resetsAt === null || w.resetsAt > now;
+}
+
+/**
+ * Check one provider and, if its session is idle, start a new one. Mutates `st`.
+ * `persist` is called as soon as a start succeeds, so the cooldown survives a quit or
+ * crash during the confirmation delay.
+ */
+export async function tickProvider(
+  p: Provider,
+  cfg: Config,
+  st: ProviderState,
+  now = Date.now(),
+  persist: (st: ProviderState) => void = () => {},
+) {
   st.lastCheckAt = now;
   let phase: "check" | "start" = "check";
   try {
@@ -63,6 +82,7 @@ export async function tickProvider(p: Provider, cfg: Config, st: ProviderState, 
       phase = "start";
       const reply = await start[p](cfg);
       st.lastStartAt = Date.now();
+      persist(st);
       phase = "check";
       await Bun.sleep(timing.confirmDelayMs);
       const after = await check[p](cfg);
@@ -133,30 +153,53 @@ export class Scheduler {
         !this.busy.has(p) &&
         (force || now - (state[p]?.lastCheckAt ?? 0) >= cfg.intervalMin * 60_000),
     );
-    await Promise.all(due.map((p) => this.withProvider(p, (st) => tickProvider(p, cfg, st, now))));
+    await Promise.all(
+      due.map((p) => this.withProvider(p, (st) => tickProvider(p, cfg, st, now, (s) => saveProviderState(p, s)))),
+    );
   }
 
-  /** Start a window right now if it's idle, ignoring pause, cooldown and active hours. */
+  /** Start a session right now if it's idle, ignoring pause, cooldown and active hours. */
   async startNow(p: Provider) {
     const cfg = loadConfig();
     await this.withProvider(p, async (st) => {
       st.lastStartAt = undefined;
       st.failureNotified = false;
-      await tickProvider(p, { ...cfg, autoStart: true, activeHours: null }, st);
+      await tickProvider(p, { ...cfg, autoStart: true, activeHours: null }, st, Date.now(), (s) =>
+        saveProviderState(p, s),
+      );
     });
   }
 
+  /**
+   * Send one test message with an unsaved config. It shares the provider lock with checks
+   * and records a start, because a test message starts a session when none is running.
+   */
+  async testModel(p: Provider, cfg: Config): Promise<string> {
+    const result = await this.withProvider(p, async (st) => {
+      // Only a session that looked idle can have been started by the test. Recording it
+      // during an active session would push the next auto-start back by the cooldown.
+      const wasIdle = !sessionActive(st.lastSnapshot, Date.now());
+      const reply = await start[p](cfg);
+      if (wasIdle) st.lastStartAt = Date.now();
+      log({ provider: p, event: "test", model: cfg[p].model, reply, countedAsStart: wasIdle });
+      return reply;
+    });
+    if (result === BUSY) throw new Error(`${LABEL[p]} is busy with a check, try again in a moment`);
+    return result;
+  }
+
   /** Serialize work per provider and persist its state without clobbering the other provider. */
-  private async withProvider(p: Provider, fn: (st: ProviderState) => Promise<void>) {
-    if (this.busy.has(p)) return;
+  private async withProvider<T>(p: Provider, fn: (st: ProviderState) => Promise<T>): Promise<T | typeof BUSY> {
+    if (this.busy.has(p)) return BUSY;
     this.busy.add(p);
     this.onChange();
     try {
       const st = loadState()[p] ?? {};
-      await fn(st);
-      const state: State = loadState();
-      state[p] = st;
-      saveState(state);
+      try {
+        return await fn(st);
+      } finally {
+        saveProviderState(p, st);
+      }
     } finally {
       this.busy.delete(p);
       this.onChange();
