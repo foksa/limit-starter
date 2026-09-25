@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "limit-starter",
+      "name": "usage-window-starter",
       "devDependencies": {
         "@types/bun": "latest",
         "typescript": "^5.7.2",

@@ -2,8 +2,8 @@ import type { ElectrobunConfig } from "electrobun";
 
 export default {
   app: {
-    name: "limit-starter",
-    identifier: "dev.limit-starter.app",
+    name: "Usage Window Starter",
+    identifier: "dev.usage-window-starter.app",
     version: "0.2.0",
   },
   runtime: {

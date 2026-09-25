@@ -1,12 +1,9 @@
 {
-  "name": "limit-starter",
+  "name": "usage-window-starter",
   "version": "0.2.0",
   "private": true,
   "license": "MIT",
   "type": "module",
-  "bin": {
-    "limit": "src/cli.ts"
-  },
   "scripts": {
     "dev": "hutch run dev",
     "build": "hutch run build",

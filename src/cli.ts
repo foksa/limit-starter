@@ -38,7 +38,7 @@ switch (cmd) {
     break;
   case "start": {
     if (arg !== "claude" && arg !== "codex") {
-      console.error("usage: limit start <claude|codex>");
+      console.error("usage: bun src/cli.ts start <claude|codex>");
       process.exit(1);
     }
     await new Scheduler().startNow(arg);
@@ -59,6 +59,6 @@ switch (cmd) {
     break;
   }
   default:
-    console.error("usage: limit [status | start <claude|codex> | models]");
+    console.error("usage: bun src/cli.ts [status | start <claude|codex> | models]");
     process.exit(1);
 }

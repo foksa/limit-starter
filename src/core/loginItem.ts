@@ -3,8 +3,10 @@ import { homedir } from "os";
 import { dirname, join } from "path";
 
 const AGENTS = join(homedir(), "Library/LaunchAgents");
-const LOGIN_LABEL = "com.limit-starter.login";
+const LOGIN_LABEL = "com.usage-window-starter.login";
 const LOGIN_PLIST = join(AGENTS, `${LOGIN_LABEL}.plist`);
+/** The login item from before the rename to Usage Window Starter; it opens the old .app. */
+const OLD_LOGIN_PLIST = join(AGENTS, "com.limit-starter.login.plist");
 /** The launchd daemon from the CLI-only version; the menu bar app replaces it. */
 const LEGACY_LABEL = "com.limit-starter";
 const LEGACY_PLIST = join(AGENTS, `${LEGACY_LABEL}.plist`);
@@ -56,5 +58,13 @@ export function removeLegacyDaemon(): boolean {
   if (!existsSync(LEGACY_PLIST)) return false;
   Bun.spawnSync(["launchctl", "bootout", `${domain()}/${LEGACY_LABEL}`]);
   unlinkSync(LEGACY_PLIST);
+  return true;
+}
+
+/** Swap the pre-rename login item for one that opens this app. */
+export function migrateLoginItem(appPath = appBundlePath()): boolean {
+  if (!existsSync(OLD_LOGIN_PLIST)) return false;
+  unlinkSync(OLD_LOGIN_PLIST);
+  if (appPath) setLaunchAtLogin(true, appPath);
   return true;
 }

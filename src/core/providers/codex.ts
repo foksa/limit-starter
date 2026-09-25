@@ -49,7 +49,7 @@ export async function appServerRequest<T>(bin: string, method: string, params?: 
   mkdirSync(PING_DIR, { recursive: true });
   const proc = Bun.spawn([bin, "app-server"], { cwd: PING_DIR, env: cliEnv(bin), stdin: "pipe", stdout: "pipe", stderr: "ignore" });
   const send = (msg: object) => proc.stdin.write(JSON.stringify(msg) + "\n");
-  send({ method: "initialize", id: 0, params: { clientInfo: { name: "limit-starter", version: "0.2.0" } } });
+  send({ method: "initialize", id: 0, params: { clientInfo: { name: "usage-window-starter", version: "0.2.0" } } });
   send({ method: "initialized" });
   send({ method, id: 1, ...(params ? { params } : {}) });
   proc.stdin.flush();

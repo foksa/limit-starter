@@ -101,7 +101,7 @@ export async function tickProvider(
       st.lastDecision = after.fiveHour.active ? "5h session active" : "start sent, session not reported yet";
       log({ provider: p, event: "start", model: cfg[p].model, reply, fiveHour: after.fiveHour });
       notify(
-        "limit-starter",
+        "Usage Window Starter",
         after.fiveHour.active
           ? `${LABEL[p]} 5h session started — resets ${fmtTime(after.fiveHour.resetsAt)}`
           : `${LABEL[p]} start message sent, but no active session reported yet`,
@@ -119,7 +119,7 @@ export async function tickProvider(
     if ((phase === "start" || st.consecutiveFailures >= FAILURE_NOTIFY_AFTER) && !st.failureNotified) {
       st.failureNotified = true;
       notify(
-        "limit-starter",
+        "Usage Window Starter",
         phase === "start"
           ? `${LABEL[p]} couldn't start a 5h session with model "${cfg[p].model}": ${msg.slice(0, 100)}`
           : `${LABEL[p]} limit check failing: ${msg.slice(0, 120)}`,

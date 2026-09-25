@@ -1,4 +1,4 @@
-# limit-starter
+# Usage Window Starter
 
 A macOS menu bar app, built with [Electrobun](https://framework.blackboard.sh/electrobun/), that watches the Claude and Codex 5-hour usage limits. When a 5h session has reset and is idle, it sends one short message to start the next one.
 
@@ -21,22 +21,22 @@ It uses only the official CLIs, run headless, with your subscription login. Ther
 ## Develop / build
 ```sh
 bun run dev        # hutch run dev: builds and launches the dev app
-bun run build      # hutch run build: build/stable-macos-arm64/limit-starter.app
+bun run build      # hutch run build: "build/stable-macos-arm64/Usage Window Starter.app"
 bun test           # parsers + scheduling rules
 bun run typecheck
 ```
-`LIMIT_STARTER_OPEN_SETTINGS=1` opens the settings window on launch. With the built app, run `open --env LIMIT_STARTER_OPEN_SETTINGS=1 <app>`.
+`USAGE_WINDOW_STARTER_OPEN_SETTINGS=1` opens the settings window on launch. With the built app, run `open --env USAGE_WINDOW_STARTER_OPEN_SETTINGS=1 <app>`.
 
 Hutch installs to `~/.hutch/bin`. Run `hutch electrobun sync` once after cloning to create the `.hutch/devkit` types.
 
 ## CLI
-`bun src/cli.ts status | start <claude|codex> | models` works without the app. It shares the same config and state.
+A dev tool for checking things without the app, for example what the parser sees after a CLI update. It shares the same config and state. `bun run status` shows each provider's 5h and weekly usage and whether it would start a session now; `bun src/cli.ts start <claude|codex>` sends a start message now; `bun src/cli.ts models` lists the models you can pick.
 
 ## Files
-- `~/.limit-starter/config.json`: settings (edited by the Settings window)
-- `~/.limit-starter/log.jsonl`: one line per check or start
-- `~/.limit-starter/state.json`: last snapshot and start time for each provider
-- `~/Library/LaunchAgents/com.limit-starter.login.plist`: only when **Launch at login** is on
+- `~/.usage-window-starter/config.json`: settings (edited by the Settings window)
+- `~/.usage-window-starter/log.jsonl`: one line per check or start
+- `~/.usage-window-starter/state.json`: last snapshot and start time for each provider
+- `~/Library/LaunchAgents/com.usage-window-starter.login.plist`: only when **Launch at login** is on
 
 If a CLI update changes the `/usage` text, the Claude check fails loudly. No start message is sent, and the menu bar shows `!`. Update `parseUsage` in `src/core/providers/claude.ts` and add the new output to `test/fixtures/`.
 

@@ -93,7 +93,7 @@ export function loadConfig(): Config {
     const recovered = { ...defaultConfig(), autoStart: false };
     saveConfig(recovered);
     notify(
-      "limit-starter",
+      "Usage Window Starter",
       `Settings file was damaged. Auto-start is paused until you check Settings. The old file was saved as ${backup}`,
     );
     return recovered;

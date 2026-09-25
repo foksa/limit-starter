@@ -12,7 +12,7 @@ const idle: Snapshot = { fiveHour: { active: false, usedPct: 0, resetsAt: null }
 const active: Snapshot = { fiveHour: { active: true, usedPct: 1, resetsAt: Date.now() + 5 * 3600_000 }, weekly: null };
 
 beforeEach(() => {
-  expect(HOME_DIR).not.toContain("/.limit-starter"); // never the real home
+  expect(HOME_DIR).not.toContain("/.usage-window-starter"); // never the real home
   rmSync(HOME_DIR, { recursive: true, force: true });
   saveConfig({ ...defaultConfig(), claude: { ...defaultConfig().claude, enabled: false } });
   timing.confirmDelayMs = 30;

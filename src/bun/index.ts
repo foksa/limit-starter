@@ -1,7 +1,7 @@
 import { BrowserView, BrowserWindow, Tray, Utils } from "electrobun/main";
 import { loadConfig, saveConfig } from "../core/config";
 import { fmtDuration, fmtShort, fmtTime } from "../core/format";
-import { appBundlePath, isLaunchAtLogin, removeLegacyDaemon, setLaunchAtLogin } from "../core/loginItem";
+import { appBundlePath, isLaunchAtLogin, migrateLoginItem, removeLegacyDaemon, setLaunchAtLogin } from "../core/loginItem";
 import { notify, setNotifier } from "../core/notify";
 import { LOG_FILE } from "../core/paths";
 import { CLAUDE_MODELS } from "../core/providers/claude";
@@ -15,11 +15,12 @@ Utils.setDockIconVisible(false);
 setNotifier((title, body) => Utils.showNotification({ title, body }));
 
 if (removeLegacyDaemon()) {
-  notify("limit-starter", "Replaced the old background daemon — the menu bar app now runs the checks.");
+  notify("Usage Window Starter", "Replaced the old background daemon — the menu bar app now runs the checks.");
 }
+migrateLoginItem();
 
 const tray = new Tray({
-  title: "limit…",
+  title: "usage…",
   image: "views://assets/tray-template.png",
   template: true,
   width: 18,
@@ -43,7 +44,7 @@ function trayTitle(): string {
     if (!w.active || (w.resetsAt !== null && w.resetsAt <= now)) return `${SHORT[p]} –`;
     return `${SHORT[p]} ${w.resetsAt === null ? "on" : fmtShort(w.resetsAt - now)}`;
   });
-  const title = parts.join(" · ") || "limit-starter";
+  const title = parts.join(" · ") || "Usage Window Starter";
   return cfg.autoStart ? title : `${title} ⏸`;
 }
 
@@ -97,7 +98,7 @@ function refreshTray() {
     { type: "normal", label: "Settings…", action: "settings" },
     { type: "normal", label: "Open log", action: "log" },
     { type: "divider" },
-    { type: "normal", label: "Quit limit-starter", action: "quit" },
+    { type: "normal", label: "Quit Usage Window Starter", action: "quit" },
   );
   tray.setMenu(items);
 }
@@ -177,7 +178,7 @@ function openSettings() {
     return;
   }
   settingsWin = new BrowserWindow({
-    title: "limit-starter settings",
+    title: "Usage Window Starter settings",
     url: "views://settings/index.html",
     frame: { width: 560, height: 720 },
     rpc: settingsRPC,
@@ -192,6 +193,6 @@ function openSettings() {
 
 refreshTray();
 scheduler.run();
-if (process.env.LIMIT_STARTER_OPEN_SETTINGS) openSettings();
+if (process.env.USAGE_WINDOW_STARTER_OPEN_SETTINGS) openSettings();
 // Keep the countdown in the menu bar fresh between checks.
 setInterval(refreshTray, 30_000);
