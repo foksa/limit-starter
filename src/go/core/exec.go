@@ -20,18 +20,23 @@ type ExecResult struct {
 	TimedOut bool
 }
 
-// CliEnv gives the CLIs a usable PATH: GUI apps and launchd get a minimal one.
-func CliEnv(bin string) []string {
+// cliPath is the PATH the CLIs get: GUI apps and launchd get a minimal one.
+func cliPath(bin string) []string {
 	seen := map[string]bool{}
 	var parts []string
 	for _, p := range append([]string{filepath.Dir(bin), "/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"},
 		strings.Split(os.Getenv("PATH"), ":")...) {
-		if p != "" && !seen[p] {
+		if p != "" && p != "." && !seen[p] {
 			seen[p] = true
 			parts = append(parts, p)
 		}
 	}
-	env := []string{"PATH=" + strings.Join(parts, ":")}
+	return parts
+}
+
+// CliEnv is the environment with cliPath as PATH.
+func CliEnv(bin string) []string {
+	env := []string{"PATH=" + strings.Join(cliPath(bin), ":")}
 	for _, kv := range os.Environ() {
 		if !strings.HasPrefix(kv, "PATH=") {
 			env = append(env, kv)
@@ -40,12 +45,27 @@ func CliEnv(bin string) []string {
 	return env
 }
 
+// ResolveBin finds a bare command name like "claude" on cliPath. exec.Command would
+// look it up on this process's own PATH, which lacks Homebrew in a GUI app.
+func ResolveBin(bin string) string {
+	if strings.Contains(bin, "/") {
+		return bin
+	}
+	for _, dir := range cliPath(bin) {
+		p := filepath.Join(dir, bin)
+		if st, err := os.Stat(p); err == nil && st.Mode().IsRegular() && st.Mode()&0o111 != 0 {
+			return p
+		}
+	}
+	return bin
+}
+
 // Run runs a CLI in the empty ping dir so no project context is picked up.
 func Run(cmd []string, timeout time.Duration) ExecResult {
 	_ = os.MkdirAll(PingDir, 0o755)
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	c := exec.CommandContext(ctx, cmd[0], cmd[1:]...)
+	c := exec.CommandContext(ctx, ResolveBin(cmd[0]), cmd[1:]...)
 	c.Dir = PingDir
 	c.Env = CliEnv(cmd[0])
 	var stdout, stderr bytes.Buffer

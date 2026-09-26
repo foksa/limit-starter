@@ -89,7 +89,7 @@ func AppServerRequest(bin, method string, params any, timeout time.Duration, out
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, bin, "app-server")
+	cmd := exec.CommandContext(ctx, ResolveBin(bin), "app-server")
 	cmd.Dir = PingDir
 	cmd.Env = CliEnv(bin)
 	stdin, err := cmd.StdinPipe()

@@ -114,7 +114,7 @@ function render(s: PanelState | null = state) {
   const up = $<HTMLButtonElement>("update");
   const label = $("update-label");
   const { phase, version } = s.update;
-  up.disabled = phase === "checking" || phase === "downloading";
+  up.disabled = phase === "checking" || phase === "downloading" || phase === "installing";
   up.classList.toggle("ready", phase === "ready");
   label.textContent =
     phase === "checking"
@@ -123,7 +123,9 @@ function render(s: PanelState | null = state) {
         ? `Downloading version ${version}…`
         : phase === "ready"
           ? `Install version ${version} & restart`
-          : "Check for updates…";
+          : phase === "installing"
+            ? `Installing version ${version}…`
+            : "Check for updates…";
 
   fit();
 }

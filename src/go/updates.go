@@ -21,7 +21,7 @@ const checkEvery = 24 * time.Hour
 type Updates struct {
 	mu        sync.Mutex
 	u         *updater.Updater
-	phase     string // idle, checking, downloading, ready, error
+	phase     string // idle, checking, downloading, ready, installing, error
 	version   string
 	err       string
 	lastCheck time.Time
@@ -56,6 +56,7 @@ func (up *Updates) set(phase string) {
 // run checks shortly after launch, then once a day. Hourly ticks compare
 // wall-clock time, so sleep doesn't delay it.
 func (up *Updates) run() {
+	time.AfterFunc(3*time.Second, up.reportLastInstall)
 	time.AfterFunc(time.Minute, func() { up.check(false) })
 	go func() {
 		for range time.Tick(time.Hour) {
@@ -69,11 +70,30 @@ func (up *Updates) run() {
 	}()
 }
 
+// reportLastInstall tells the user how the last install went. The helper does its
+// work after this app quits, so a failure is only known on the next launch.
+func (up *Updates) reportLastInstall() {
+	if up.u == nil {
+		return
+	}
+	r, err := up.u.NewResult()
+	if err != nil || r == nil {
+		return
+	}
+	if r.Success {
+		core.Log("event", "update-complete", "version", r.Version)
+		core.Notify(appName, "Updated to version "+r.Version)
+		return
+	}
+	core.Log("event", "update-error", "phase", "native-"+r.Phase, "version", r.Version, "error", r.Message)
+	core.Notify(appName, fmt.Sprintf("Update to %s failed during %s: %s", r.Version, r.Phase, truncate(r.Message, 100)))
+}
+
 // check looks for a new version and downloads it. manual also reports
 // "up to date" and errors.
 func (up *Updates) check(manual bool) {
 	up.mu.Lock()
-	if up.phase == "checking" || up.phase == "downloading" || up.phase == "ready" {
+	if up.phase == "checking" || up.phase == "downloading" || up.phase == "ready" || up.phase == "installing" {
 		up.mu.Unlock()
 		return
 	}
@@ -133,10 +153,17 @@ func (up *Updates) check(manual bool) {
 
 // install replaces the app with the downloaded version and restarts it.
 func (up *Updates) install() {
-	if phase, _ := up.status(); phase != "ready" {
+	// Claim the install under the lock: duplicate clicks arrive on separate goroutines
+	// and must not start two helpers against the same bundle.
+	up.mu.Lock()
+	if up.phase != "ready" {
+		up.mu.Unlock()
 		return
 	}
-	_, version := up.status()
+	up.phase = "installing"
+	version := up.version
+	up.mu.Unlock()
+	up.onChange()
 	core.Log("event", "update-install", "from", up.u.Info.Version, "to", version)
 	app.scheduler.Stop()
 	if err := up.u.Apply(); err != nil {

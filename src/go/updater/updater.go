@@ -452,3 +452,104 @@ func (u *Updater) Apply() error {
 	}
 	return cmd.Process.Release()
 }
+
+// NativeResult is what Electrobun's update helper writes after an install attempt.
+type NativeResult struct {
+	SchemaVersion int    `json:"schema_version"`
+	TransactionID string `json:"transaction_id"`
+	Success       bool   `json:"success"`
+	Phase         string `json:"phase"`
+	Message       string `json:"message"`
+	Identifier    string `json:"identifier"`
+	Channel       string `json:"channel"`
+	Version       string `json:"version"`
+	Hash          string `json:"hash"`
+}
+
+const observedResultFile = ".electrobun-observed-update-result.json"
+
+var (
+	resultFileName = regexp.MustCompile(`^\.electrobun-update-([a-f0-9]{32})\.result\.json$`)
+	transactionID  = regexp.MustCompile(`^[a-f0-9]{32}$`)
+	resultPhases   = map[string]bool{"validating": true, "waiting_for_parent": true, "extracting": true,
+		"validating_payload": true, "swapping": true, "integrating": true, "launching": true, "complete": true}
+)
+
+// validResult checks a result file the way Electrobun does, without trusting its name.
+func (u *Updater) validResult(data []byte, tx string) (*NativeResult, bool) {
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(data, &fields) != nil || len(fields) != 9 {
+		return nil, false
+	}
+	var r NativeResult
+	if json.Unmarshal(data, &r) != nil {
+		return nil, false
+	}
+	ok := r.SchemaVersion == 1 && r.TransactionID == tx && transactionID.MatchString(tx) &&
+		resultPhases[r.Phase] && r.Success == (r.Phase == "complete") &&
+		r.Message != "" && len(r.Message) <= 4096 && !ctrlChars.MatchString(r.Message) &&
+		r.Identifier == u.Info.Identifier && r.Channel == u.Info.Channel &&
+		r.Version != "" && len(r.Version) <= 256 && !ctrlChars.MatchString(r.Version) && safeHash.MatchString(r.Hash)
+	return &r, ok
+}
+
+// NewResult returns the outcome of the last install attempt if it hasn't been
+// reported yet, and marks it reported. A success must match the running build; a
+// failure is for a build other than the running one.
+func (u *Updater) NewResult() (*NativeResult, error) {
+	if u.Info.Channel == "dev" {
+		return nil, nil
+	}
+	root, err := u.channelRoot()
+	if err != nil {
+		return nil, err
+	}
+	entries, err := os.ReadDir(root)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil || len(entries) > 1024 {
+		return nil, err
+	}
+	var best *NativeResult
+	var bestTime time.Time
+	for _, e := range entries {
+		m := resultFileName.FindStringSubmatch(e.Name())
+		if m == nil || !e.Type().IsRegular() {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil || info.Size() <= 0 || info.Size() > 64*1024 {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(root, e.Name()))
+		if err != nil {
+			continue
+		}
+		r, ok := u.validResult(data, m[1])
+		if !ok {
+			continue
+		}
+		matches := (r.Success && r.Version == u.Info.Version && r.Hash == u.Info.Hash) || (!r.Success && r.Hash != u.Info.Hash)
+		if matches && (best == nil || info.ModTime().After(bestTime)) {
+			best, bestTime = r, info.ModTime()
+		}
+	}
+	if best == nil {
+		return nil, nil
+	}
+	observedPath := filepath.Join(root, observedResultFile)
+	var observed struct {
+		SchemaVersion int    `json:"schema_version"`
+		TransactionID string `json:"transaction_id"`
+	}
+	if data, err := os.ReadFile(observedPath); err == nil && json.Unmarshal(data, &observed) == nil &&
+		observed.TransactionID == best.TransactionID {
+		return nil, nil
+	}
+	observed.SchemaVersion, observed.TransactionID = 1, best.TransactionID
+	if err := writeJSONAtomic(observedPath, observed, 0o644); err != nil {
+		return nil, err
+	}
+	return best, nil
+}

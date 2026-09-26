@@ -30,4 +30,4 @@ export interface ModelOption {
   isDefault?: boolean;
 }
 
-export type UpdatePhase = "idle" | "checking" | "downloading" | "ready" | "error";
+export type UpdatePhase = "idle" | "checking" | "downloading" | "ready" | "installing" | "error";

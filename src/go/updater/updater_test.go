@@ -76,3 +76,51 @@ func TestDevBuildsNeverUpdate(t *testing.T) {
 		t.Fatal(res, err)
 	}
 }
+
+func TestNewResultReportsEachInstallOnce(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	u := testUpdater()
+	u.Info.Version = "0.2.0"
+	root := filepath.Join(home, "Library", "Application Support", u.Info.Identifier, "stable")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write := func(tx string, r NativeResult) {
+		r.SchemaVersion, r.TransactionID, r.Identifier, r.Channel = 1, tx, u.Info.Identifier, u.Info.Channel
+		if err := writeJSONAtomic(filepath.Join(root, ".electrobun-update-"+tx+".result.json"), r, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tx := "0123456789abcdef0123456789abcdef"
+	write(tx, NativeResult{Success: false, Phase: "swapping", Message: "disk full", Version: "0.3.0", Hash: "bbbb"})
+
+	r, err := u.NewResult()
+	if err != nil || r == nil || r.Success || r.Phase != "swapping" || r.Version != "0.3.0" {
+		t.Fatalf("%+v %v", r, err)
+	}
+	if r, _ := u.NewResult(); r != nil {
+		t.Fatal("reported twice")
+	}
+
+	// A success must describe the running build.
+	tx2 := "fedcba9876543210fedcba9876543210"
+	write(tx2, NativeResult{Success: true, Phase: "complete", Message: "done", Version: "0.2.0", Hash: "aaaa"})
+	if r, _ := u.NewResult(); r == nil || !r.Success || r.TransactionID != tx2 {
+		t.Fatalf("%+v", r)
+	}
+}
+
+func TestNewResultIgnoresMalformedFiles(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	u := testUpdater()
+	root := filepath.Join(home, "Library", "Application Support", u.Info.Identifier, "stable")
+	_ = os.MkdirAll(root, 0o755)
+	name := filepath.Join(root, ".electrobun-update-0123456789abcdef0123456789abcdef.result.json")
+	// success doesn't match phase, and an extra field
+	_ = os.WriteFile(name, []byte(`{"schema_version":1,"transaction_id":"0123456789abcdef0123456789abcdef","success":true,"phase":"swapping","message":"x","identifier":"dev.usage-window-starter.app","channel":"stable","version":"0.3.0","hash":"bbbb","extra":1}`), 0o644)
+	if r, err := u.NewResult(); r != nil || err != nil {
+		t.Fatalf("%+v %v", r, err)
+	}
+}

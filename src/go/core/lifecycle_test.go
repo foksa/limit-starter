@@ -312,3 +312,27 @@ func TestOneOffCommandsLeaveNoTimers(t *testing.T) {
 		t.Fatal("checks =", checks)
 	}
 }
+
+func TestBareCommandNamesResolveOnTheCliPath(t *testing.T) {
+	setup(t)
+	dir := filepath.Join(HomeDir, "bin")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	fake := filepath.Join(dir, "fake-cli")
+	if err := os.WriteFile(fake, []byte("#!/bin/sh\necho hi\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// A GUI app's PATH doesn't include the CLI's folder.
+	t.Setenv("PATH", "/usr/bin:/bin")
+	if got := ResolveBin("fake-cli"); got != "fake-cli" {
+		t.Fatal("found a command that isn't on the CLI path:", got)
+	}
+	t.Setenv("PATH", "/usr/bin:/bin:"+dir)
+	if got := ResolveBin("fake-cli"); got != fake {
+		t.Fatal(got)
+	}
+	if r := Run([]string{"sh", "-c", "echo ok"}, 5*time.Second); r.Code != 0 || strings.TrimSpace(r.Stdout) != "ok" {
+		t.Fatalf("%+v", r)
+	}
+}
