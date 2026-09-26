@@ -1,0 +1,31 @@
+#!/bin/sh
+# Build a stable release and publish it to GitHub Releases, where the app looks for updates.
+# Bump app.version in electrobun.config.ts (and package.json) first.
+set -eu
+cd "$(dirname "$0")/.."
+
+version=$(bun -e 'console.log((await import("./electrobun.config.ts")).default.app.version)')
+tag="v$version"
+
+if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+  echo "Commit your changes first." >&2
+  exit 1
+fi
+git fetch --quiet
+if [ "$(git rev-parse HEAD)" != "$(git rev-parse '@{u}')" ]; then
+  echo "Push (or pull) first: HEAD differs from its upstream." >&2
+  exit 1
+fi
+if gh release view "$tag" >/dev/null 2>&1; then
+  echo "Release $tag already exists. Bump app.version in electrobun.config.ts." >&2
+  exit 1
+fi
+
+bun test
+# The build diffs against the release currently at release.baseUrl to make a patch,
+# so it has to run before the new release is published.
+rm -rf artifacts
+hutch run build
+
+gh release create "$tag" artifacts/* --target "$(git rev-parse HEAD)" --title "$tag" --generate-notes
+echo "Published $tag"

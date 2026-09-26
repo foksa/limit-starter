@@ -30,4 +30,8 @@ export default {
       createDmg: false,
     },
   },
+  release: {
+    // Where the app looks for updates; scripts/release.sh uploads each build here.
+    baseUrl: "https://github.com/foksa/usage-window-starter/releases/latest/download",
+  },
 } satisfies ElectrobunConfig;
