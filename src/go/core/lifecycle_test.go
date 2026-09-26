@@ -375,3 +375,30 @@ func TestInstanceLockAllowsOneCopy(t *testing.T) {
 	}
 	again.Close()
 }
+
+func TestLoginItemRunsTheAppAndOldOnesAreRewritten(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	app := "/Applications/Usage Window Starter.app"
+	if RefreshLoginItem(app) {
+		t.Fatal("rewrote a login item that doesn't exist")
+	}
+	// A login item from a version that ran /usr/bin/open (macOS showed it as "open").
+	if err := os.MkdirAll(agentsDir(), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(loginPlist(), []byte("<plist><string>/usr/bin/open</string></plist>"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if !RefreshLoginItem(app) || RefreshLoginItem(app) {
+		t.Fatal("expected exactly one rewrite")
+	}
+	data, _ := os.ReadFile(loginPlist())
+	for _, want := range []string{app + "/Contents/MacOS/launcher", BundleID, "RunAtLoad"} {
+		if !strings.Contains(string(data), want) {
+			t.Fatalf("login item lacks %q:\n%s", want, data)
+		}
+	}
+	if strings.Contains(string(data), "/usr/bin/open") {
+		t.Fatal("still runs open")
+	}
+}

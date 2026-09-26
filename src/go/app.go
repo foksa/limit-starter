@@ -71,6 +71,7 @@ func runApp() error {
 		core.Notify(appName, "Replaced the old background daemon — the menu bar app now runs the checks.")
 	}
 	core.MigrateLoginItem(core.AppBundlePath())
+	core.RefreshLoginItem(core.AppBundlePath())
 
 	app.scheduler = core.NewScheduler(refreshTray)
 	app.updates = newUpdates(bundle, refreshTray)

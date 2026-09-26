@@ -43,8 +43,48 @@ func IsLaunchAtLogin() bool { return exists(loginPlist()) }
 
 var xmlEscape = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;")
 
-// SetLaunchAtLogin writes a LaunchAgent that just opens the app at login (in the
-// background, no KeepAlive).
+// BundleID is the app's bundle identifier; macOS uses it to show the login item
+// under the app's name.
+const BundleID = "dev.usage-window-starter.app"
+
+// loginPlistXML runs the app's own executable rather than /usr/bin/open: macOS
+// names a login item after the program it runs, so with `open` the "background
+// item added" notification and Login Items said "open".
+func loginPlistXML(appPath string) string {
+	return fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>%s</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>%s</string>
+  </array>
+  <key>AssociatedBundleIdentifiers</key>
+  <array>
+    <string>%s</string>
+  </array>
+  <key>LimitLoadToSessionType</key><string>Aqua</string>
+  <key>RunAtLoad</key><true/>
+</dict>
+</plist>
+`, loginLabel, xmlEscape.Replace(filepath.Join(appPath, "Contents", "MacOS", "launcher")), BundleID)
+}
+
+// RefreshLoginItem rewrites an existing login item that isn't in the current form,
+// e.g. one from a version that started the app with /usr/bin/open.
+func RefreshLoginItem(appPath string) bool {
+	if appPath == "" || !IsLaunchAtLogin() {
+		return false
+	}
+	current, err := os.ReadFile(loginPlist())
+	if err != nil || string(current) == loginPlistXML(appPath) {
+		return false
+	}
+	return SetLaunchAtLogin(true, appPath) == nil
+}
+
+// SetLaunchAtLogin writes a LaunchAgent that starts the app at login (no KeepAlive).
 func SetLaunchAtLogin(enabled bool, appPath string) error {
 	if !enabled {
 		if err := os.Remove(loginPlist()); err != nil && !os.IsNotExist(err) {
@@ -58,22 +98,7 @@ func SetLaunchAtLogin(enabled bool, appPath string) error {
 	if err := os.MkdirAll(agentsDir(), 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(loginPlist(), []byte(fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key><string>%s</string>
-  <key>ProgramArguments</key>
-  <array>
-    <string>/usr/bin/open</string>
-    <string>-g</string>
-    <string>-a</string>
-    <string>%s</string>
-  </array>
-  <key>RunAtLoad</key><true/>
-</dict>
-</plist>
-`, loginLabel, xmlEscape.Replace(appPath))), 0o644)
+	return os.WriteFile(loginPlist(), []byte(loginPlistXML(appPath)), 0o644)
 }
 
 // RemoveLegacyDaemon stops and removes the old CLI daemon so it doesn't run checks
