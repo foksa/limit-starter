@@ -3,7 +3,7 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import { parseResetTime, parseUsage } from "../src/core/providers/claude";
 import { parseRateLimits } from "../src/core/providers/codex";
-import { inActiveHours, shouldStart } from "../src/core/scheduler";
+import { activeHoursBegan, inActiveHours, shouldStart } from "../src/core/scheduler";
 import type { Snapshot } from "../src/core/types";
 
 const fixture = (name: string) => readFileSync(join(import.meta.dir, "fixtures", name), "utf8");
@@ -116,5 +116,16 @@ describe("inActiveHours", () => {
     expect(inActiveHours(cfg, new Date(2026, 8, 24, 23, 0).getTime())).toBe(true);
     expect(inActiveHours(cfg, new Date(2026, 8, 24, 3, 0).getTime())).toBe(true);
     expect(inActiveHours(cfg, NOW)).toBe(false);
+  });
+});
+
+describe("activeHoursBegan", () => {
+  test("finds today's or yesterday's start, or null outside", () => {
+    const day = { activeHours: { start: "06:00", end: "23:59" } };
+    expect(activeHoursBegan(day, new Date(2026, 8, 26, 9, 0).getTime())).toBe(new Date(2026, 8, 26, 6, 0).getTime());
+    expect(activeHoursBegan(day, new Date(2026, 8, 26, 3, 0).getTime())).toBeNull();
+    const night = { activeHours: { start: "22:00", end: "02:00" } };
+    expect(activeHoursBegan(night, new Date(2026, 8, 26, 1, 0).getTime())).toBe(new Date(2026, 8, 25, 22, 0).getTime());
+    expect(activeHoursBegan({ activeHours: null }, Date.now())).toBeNull();
   });
 });

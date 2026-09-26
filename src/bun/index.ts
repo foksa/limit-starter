@@ -6,7 +6,7 @@ import { notify, setNotifier } from "../core/notify";
 import { LOG_FILE } from "../core/paths";
 import { CLAUDE_MODELS } from "../core/providers/claude";
 import { listCodexModels } from "../core/providers/codex";
-import { LABEL, Scheduler } from "../core/scheduler";
+import { inActiveHours, LABEL, Scheduler } from "../core/scheduler";
 import { loadState } from "../core/state";
 import { PROVIDERS, type Provider, type ProviderState } from "../core/types";
 import type { SettingsRPC } from "../shared/rpc";
@@ -30,13 +30,18 @@ const scheduler = new Scheduler(() => refreshTray());
 
 const SHORT: Record<Provider, string> = { claude: "C", codex: "X" };
 
-/** Menu bar text: time left in each running 5h window, e.g. "C 4:49 · X 2:38". */
+/**
+ * Menu bar text: time left in each running 5h window, e.g. "C 4:49 · X 2:38".
+ * Outside active hours nothing is checked, so it shows "C – · X –" instead of stale data.
+ */
 function trayTitle(): string {
   const cfg = loadConfig();
   const state = loadState();
   const now = Date.now();
+  const resting = !inActiveHours(cfg, now);
   const parts = PROVIDERS.filter((p) => cfg[p].enabled).map((p) => {
     if (scheduler.isBusy(p)) return `${SHORT[p]} …`;
+    if (resting) return `${SHORT[p]} –`;
     const st = state[p];
     if (st?.lastError) return `${SHORT[p]} !`;
     const w = st?.lastSnapshot?.fiveHour;

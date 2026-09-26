@@ -47,6 +47,16 @@ export function inActiveHours(cfg: Pick<Config, "activeHours">, now: number): bo
   return s <= e ? cur >= s && cur < e : cur >= s || cur < e; // supports ranges past midnight
 }
 
+/** When the active-hours period containing `now` began, or null when `now` is outside it. */
+export function activeHoursBegan(cfg: Pick<Config, "activeHours">, now: number): number | null {
+  if (!cfg.activeHours || !inActiveHours(cfg, now)) return null;
+  const s = minutesOfDay(cfg.activeHours.start);
+  const d = new Date(now);
+  d.setHours(Math.floor(s / 60), s % 60, 0, 0);
+  if (d.getTime() > now) d.setDate(d.getDate() - 1); // began yesterday (range past midnight)
+  return d.getTime();
+}
+
 export function shouldStart(
   snap: Snapshot,
   st: ProviderState,
@@ -162,17 +172,21 @@ export class Scheduler {
     return this.busy.has(p);
   }
 
-  /** Check every enabled provider whose interval has elapsed (or all of them with `force`). */
-  async runDue(force = false) {
+  /**
+   * Check every enabled provider whose interval has elapsed (or all of them with `force`).
+   * Nothing runs outside active hours unless forced. When they begin, every provider not
+   * checked since is due at once, instead of each waiting out its own interval.
+   */
+  async runDue(force = false, now = Date.now()) {
     const cfg = loadConfig();
-    const now = Date.now();
+    if (!force && !inActiveHours(cfg, now)) return;
+    const began = activeHoursBegan(cfg, now);
     const state = loadState();
-    const due = PROVIDERS.filter(
-      (p) =>
-        cfg[p].enabled &&
-        !this.busy.has(p) &&
-        (force || now - (state[p]?.lastCheckAt ?? 0) >= cfg.intervalMin * 60_000),
-    );
+    const due = PROVIDERS.filter((p) => {
+      if (!cfg[p].enabled || this.busy.has(p)) return false;
+      const last = state[p]?.lastCheckAt ?? 0;
+      return force || now - last >= cfg.intervalMin * 60_000 || (began !== null && last < began);
+    });
     await Promise.all(
       due.map((p) => this.withProvider(p, (st) => tickProvider(p, cfg, st, now, (s) => saveProviderState(p, s)))),
     );
@@ -261,7 +275,8 @@ export class Scheduler {
   private async checkAtReset(p: Provider) {
     this.resetTimers.delete(p);
     const cfg = loadConfig();
-    if (!cfg[p].enabled) return;
+    // Outside active hours the first regular check once they begin takes over.
+    if (!cfg[p].enabled || !inActiveHours(cfg, Date.now())) return;
     log({ provider: p, event: "reset-check", retry: this.resetRetries.get(p) ?? 0 });
     // If a check is already running, its own completion plans the next reset check.
     await this.withProvider(p, (st) => tickProvider(p, cfg, st, Date.now(), (s) => saveProviderState(p, s)));

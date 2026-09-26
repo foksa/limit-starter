@@ -98,6 +98,21 @@ describe("scheduler lifecycle", () => {
     expect(starts).toBe(0);
   });
 
+  test("no checks outside active hours, and all providers are due as soon as they begin", async () => {
+    saveConfig({ ...loadConfig(), intervalMin: 30, activeHours: { start: "06:00", end: "23:59" } });
+    let checks = 0;
+    check.codex = async () => (checks++, active);
+    const s = new Scheduler();
+    saveProviderState("codex", { lastCheckAt: new Date(2026, 8, 25, 23, 50).getTime() });
+    await s.runDue(false, new Date(2026, 8, 26, 3, 0).getTime()); // interval is up, but it's night
+    expect(checks).toBe(0);
+    saveProviderState("codex", { lastCheckAt: new Date(2026, 8, 26, 5, 50).getTime() }); // e.g. a forced check
+    await s.runDue(false, new Date(2026, 8, 26, 6, 0).getTime()); // interval not up, but hours just began
+    expect(checks).toBe(1);
+    await s.runDue(true, new Date(2026, 8, 26, 3, 0).getTime()); // "Check now" still works at night
+    expect(checks).toBe(2);
+  });
+
   test("state is saved even when the check throws", async () => {
     check.codex = async () => {
       throw new Error("boom");
