@@ -4,7 +4,9 @@ A macOS menu bar app, built with [Electrobun](https://framework.blackboard.sh/el
 
 Besides the regular check interval (10 min by default), it checks once more right after each running session's reported reset time: 30 s later for Codex, which reports exact seconds, and 90 s for Claude, whose `/usage` shows minutes only. That way the next session starts within about a minute of the reset.
 
-The menu bar shows the time left in each running 5h session, for example `C 4:30 · X 2:18`. It shows `–` when a session is idle, `…` while checking, and `!` after an error. The menu has details for each provider, **Check now**, **Start … 5h session now**, an **Auto-start** toggle, **Settings…**, and **Open log**.
+The menu bar shows the time left in each running 5h session, for example `C 4:30 · X 2:18`. It shows `–` when a session is idle, `…` while checking, and `!` after an error. The menu has details for each provider, **Check now**, **Start … 5h session now**, an **Auto-start** toggle, **Settings…**, **Open log**, and **Check for updates…**.
+
+It checks for a new version once a day and downloads it in the background. When it's ready, you get a notification and the menu offers **Install update … & restart**.
 
 It uses only the official CLIs, run headless, with your subscription login. There are no direct API calls:
 
@@ -28,6 +30,12 @@ bun run typecheck
 `USAGE_WINDOW_STARTER_OPEN_SETTINGS=1` opens the settings window on launch. With the built app, run `open --env USAGE_WINDOW_STARTER_OPEN_SETTINGS=1 <app>`.
 
 Hutch installs to `~/.hutch/bin`. Run `hutch electrobun sync` once after cloning to create the `.hutch/devkit` types.
+
+## Release
+1. Bump `app.version` in `electrobun.config.ts` and `package.json`, then commit and push.
+2. Run `bun run release`. It runs the tests, builds the stable app, and publishes `artifacts/*` as GitHub release `v<version>` with `gh`.
+
+Installed apps fetch `stable-macos-arm64-update.json` from the latest release (`release.baseUrl`). They download a small patch when the release has one for their build, or the full app otherwise. Dev builds never update.
 
 ## CLI
 A dev tool for checking things without the app, for example what the parser sees after a CLI update. It shares the same config and state. `bun run status` shows each provider's 5h and weekly usage and whether it would start a session now; `bun src/cli.ts start <claude|codex>` sends a start message now; `bun src/cli.ts models` lists the models you can pick.

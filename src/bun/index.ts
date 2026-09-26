@@ -10,6 +10,7 @@ import { inActiveHours, LABEL, Scheduler } from "../core/scheduler";
 import { loadState } from "../core/state";
 import { PROVIDERS, type Provider, type ProviderState } from "../core/types";
 import type { SettingsRPC } from "../shared/rpc";
+import { Updates } from "./updates";
 
 Utils.setDockIconVisible(false);
 setNotifier((title, body) => Utils.showNotification({ title, body }));
@@ -27,6 +28,7 @@ const tray = new Tray({
   height: 18,
 });
 const scheduler = new Scheduler(() => refreshTray());
+const updates = new Updates(() => refreshTray());
 
 const SHORT: Record<Provider, string> = { claude: "C", codex: "X" };
 
@@ -74,6 +76,19 @@ function providerLines(p: Provider, st: ProviderState | undefined, now: number):
   return lines;
 }
 
+function updateItem() {
+  switch (updates.phase) {
+    case "checking":
+      return { type: "normal", label: "Checking for updates…", enabled: false };
+    case "downloading":
+      return { type: "normal", label: `Downloading version ${updates.version}…`, enabled: false };
+    case "ready":
+      return { type: "normal", label: `Install update ${updates.version} & restart`, action: "update-install" };
+    default:
+      return { type: "normal", label: "Check for updates…", action: "update-check" };
+  }
+}
+
 function refreshTray() {
   const cfg = loadConfig();
   const state = loadState();
@@ -102,6 +117,7 @@ function refreshTray() {
     { type: "normal", label: "Auto-start 5h sessions", action: "toggle-auto", checked: cfg.autoStart },
     { type: "normal", label: "Settings…", action: "settings" },
     { type: "normal", label: "Open log", action: "log" },
+    updateItem(),
     { type: "divider" },
     { type: "normal", label: "Quit Usage Window Starter", action: "quit" },
   );
@@ -120,6 +136,11 @@ tray.on("tray-clicked", (event: any) => {
     if (cfg.autoStart) void scheduler.runDue(true);
   } else if (action === "settings") openSettings();
   else if (action === "log") Utils.openPath(LOG_FILE);
+  else if (action === "update-check") void updates.check(true);
+  else if (action === "update-install") {
+    scheduler.stop();
+    void updates.install().then(() => scheduler.run()); // only returns if the install failed
+  }
   else if (action === "quit") {
     scheduler.stop();
     tray.remove();
@@ -198,6 +219,7 @@ function openSettings() {
 
 refreshTray();
 scheduler.run();
+updates.run();
 if (process.env.USAGE_WINDOW_STARTER_OPEN_SETTINGS) openSettings();
 // Keep the countdown in the menu bar fresh between checks.
 setInterval(refreshTray, 30_000);
