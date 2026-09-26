@@ -19,10 +19,17 @@ export default {
       settings: {
         entrypoint: "src/settings/index.ts",
       },
+      panel: {
+        entrypoint: "src/panel/index.ts",
+      },
     },
     copy: {
       "src/settings/index.html": "views/settings/index.html",
       "src/settings/index.css": "views/settings/index.css",
+      "src/panel/index.html": "views/panel/index.html",
+      "src/panel/index.css": "views/panel/index.css",
+      "src/panel/logos/claude.svg": "views/panel/logos/claude.svg",
+      "src/panel/logos/openai.svg": "views/panel/logos/openai.svg",
       "assets/tray-template.png": "views/assets/tray-template.png",
     },
     mac: {

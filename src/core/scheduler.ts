@@ -181,12 +181,25 @@ export class Scheduler {
     const cfg = loadConfig();
     if (!force && !inActiveHours(cfg, now)) return;
     const began = activeHoursBegan(cfg, now);
+    await this.runWhere(
+      cfg,
+      now,
+      (last) => force || now - last >= cfg.intervalMin * 60_000 || (began !== null && last < began),
+    );
+  }
+
+  /** Check every enabled provider not checked within `maxAgeMs`, in active hours only. */
+  async refresh(maxAgeMs: number, now = Date.now()) {
+    const cfg = loadConfig();
+    if (!inActiveHours(cfg, now)) return;
+    await this.runWhere(cfg, now, (last) => now - last >= maxAgeMs);
+  }
+
+  private async runWhere(cfg: Config, now: number, isDue: (lastCheckAt: number) => boolean) {
     const state = loadState();
-    const due = PROVIDERS.filter((p) => {
-      if (!cfg[p].enabled || this.busy.has(p)) return false;
-      const last = state[p]?.lastCheckAt ?? 0;
-      return force || now - last >= cfg.intervalMin * 60_000 || (began !== null && last < began);
-    });
+    const due = PROVIDERS.filter(
+      (p) => cfg[p].enabled && !this.busy.has(p) && isDue(state[p]?.lastCheckAt ?? 0),
+    );
     await Promise.all(
       due.map((p) => this.withProvider(p, (st) => tickProvider(p, cfg, st, now, (s) => saveProviderState(p, s)))),
     );
