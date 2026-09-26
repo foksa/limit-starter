@@ -28,18 +28,20 @@ var panel struct {
 	// blurredAt is when the panel last hid on losing focus; a click on the icon
 	// itself causes that too.
 	blurredAt time.Time
-	// idle closes the hidden panel after panelIdle, which ends its WebKit processes
-	// (about 40 MB). pendingShow: a new panel is shown once its page has loaded.
+	// idle closes the panel once hidden (after panelIdle), which ends its WebKit
+	// processes (about 40 MB). pendingShow: a new panel is shown once its page has
+	// loaded.
 	idle        *time.Timer
 	pendingShow bool
 }
 
-// panelIdle is how long a hidden panel is kept for instant reopening.
-var panelIdle = 3 * time.Minute
+// panelIdle is how long a hidden panel is kept. Recreating it takes about 0.2 s,
+// which isn't worth ~40 MB, so by default it goes right away.
+var panelIdle time.Duration
 
 func init() {
 	panel.height = 320
-	// For testing: USAGE_WINDOW_STARTER_PANEL_IDLE=5s.
+	// To keep it around instead: USAGE_WINDOW_STARTER_PANEL_IDLE=3m.
 	if d, err := time.ParseDuration(os.Getenv("USAGE_WINDOW_STARTER_PANEL_IDLE")); err == nil && d > 0 {
 		panelIdle = d
 	}
@@ -283,6 +285,7 @@ func hidePanel() {
 	if panel.idle != nil {
 		panel.idle.Stop()
 	}
+	// Always via a timer: never close the window inside its own blur callback.
 	panel.idle = time.AfterFunc(panelIdle, destroyPanel)
 	panel.mu.Unlock()
 }
