@@ -1,8 +1,5 @@
 import type { RPCSchema } from "electrobun/main";
-import type { Config } from "../core/config";
-import type { ModelOption } from "../core/providers/codex";
-import type { LimitWindow, Provider } from "../core/types";
-import type { UpdatePhase } from "../bun/updates";
+import type { Config, LimitWindow, ModelOption, Provider, UpdatePhase } from "./types";
 
 export interface SettingsPayload {
   config: Config;

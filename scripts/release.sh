@@ -4,7 +4,7 @@
 set -eu
 cd "$(dirname "$0")/.."
 
-version=$(bun -e 'console.log((await import("./electrobun.config.ts")).default.app.version)')
+version=$(sed -n 's/^ *version: "\([^"]*\)".*/\1/p' electrobun.config.ts | head -1)
 tag="v$version"
 
 if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
@@ -21,7 +21,7 @@ if gh release view "$tag" >/dev/null 2>&1; then
   exit 1
 fi
 
-bun test
+sh scripts/go.sh test ./...
 # The build diffs against the release currently at release.baseUrl to make a patch,
 # so it has to run before the new release is published.
 rm -rf artifacts

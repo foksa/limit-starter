@@ -11,9 +11,9 @@ export default {
     exitOnLastWindowClosed: false,
   },
   build: {
-    mainProcess: "bun",
-    bun: {
-      entrypoint: "src/bun/index.ts",
+    mainProcess: "go",
+    go: {
+      package: "./src/go",
     },
     views: {
       settings: {

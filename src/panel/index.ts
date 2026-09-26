@@ -1,5 +1,5 @@
 import Electrobun, { Electroview } from "electrobun/view";
-import { fmtShort, fmtTime } from "../core/format";
+import { fmtShort, fmtTime } from "../shared/format";
 import type { PanelAction, PanelProvider, PanelRPC, PanelState } from "../shared/rpc";
 
 
