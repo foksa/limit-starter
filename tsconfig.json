@@ -12,6 +12,6 @@
     "lib": ["ESNext", "DOM"],
     "types": ["bun"]
   },
-  "include": ["src", "test", "electrobun.config.ts"],
+  "include": ["src/panel", "src/settings", "src/shared", "electrobun.config.ts"],
   "exclude": ["node_modules", "build", "dist", ".hutch"]
 }

@@ -1,8 +1,6 @@
 import Electrobun, { Electroview } from "electrobun/view";
-import type { Config } from "../core/config";
-import type { ModelOption } from "../core/providers/codex";
-import type { Provider } from "../core/types";
 import type { SettingsRPC } from "../shared/rpc";
+import type { Config, ModelOption, Provider } from "../shared/types";
 
 const rpc = Electroview.defineRPC<SettingsRPC>({
   maxRequestTime: 180_000,

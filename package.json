@@ -8,8 +8,8 @@
     "dev": "hutch run dev",
     "build": "hutch run build",
     "release": "sh scripts/release.sh",
-    "status": "bun src/cli.ts status",
-    "test": "bun test",
+    "status": "sh scripts/go.sh run ./src/go status",
+    "test": "sh scripts/go.sh test ./...",
     "typecheck": "tsc --noEmit -p ."
   },
   "devDependencies": {
