@@ -35,6 +35,17 @@ function bar(pct: number): HTMLElement {
   return b;
 }
 
+function startButton(p: PanelProvider): HTMLElement {
+  const start = el("button", "pill", "Start") as HTMLButtonElement;
+  start.type = "button";
+  start.title = `Start a ${p.label} 5h session now`;
+  start.addEventListener("click", (e) => {
+    e.stopPropagation();
+    send({ name: "start", provider: p.id });
+  });
+  return start;
+}
+
 function providerRow(p: PanelProvider, s: PanelState, now: number): HTMLElement {
   const li = el("li", `row provider ${p.id}`);
   if (!p.enabled) li.classList.add("off");
@@ -56,7 +67,9 @@ function providerRow(p: PanelProvider, s: PanelState, now: number): HTMLElement 
   } else if (p.busy) {
     main.append(el("div", "detail", "Checking…"));
   } else if (s.resting) {
+    // No checks at night, but a manual start still works (it checks first).
     main.append(el("div", "detail", `Resting until ${s.activeFrom}`));
+    if (!running) side.append(startButton(p));
   } else if (!w) {
     main.append(el("div", "detail", "Not checked yet"));
   } else if (running) {
@@ -68,14 +81,7 @@ function providerRow(p: PanelProvider, s: PanelState, now: number): HTMLElement 
     side.append(t);
   } else {
     main.append(el("div", "detail", "No 5h session running"));
-    const start = el("button", "pill", "Start") as HTMLButtonElement;
-    start.type = "button";
-    start.title = `Start a ${p.label} 5h session now`;
-    start.addEventListener("click", (e) => {
-      e.stopPropagation();
-      send({ name: "start", provider: p.id });
-    });
-    side.append(start);
+    side.append(startButton(p));
   }
 
   if (p.enabled && p.weekly && !s.resting) {

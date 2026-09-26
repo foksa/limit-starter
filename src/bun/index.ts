@@ -163,6 +163,8 @@ const panel = new BrowserWindow({
   rpc: panelRPC,
 });
 panel.setAlwaysOnTop(true);
+// Otherwise, after switching Spaces, it would reopen on the Space it was last shown on.
+panel.setVisibleOnAllWorkspaces(true);
 panel.on("blur", () => {
   if (!panel.isVisible()) return;
   panelBlurredAt = Date.now();
@@ -172,15 +174,19 @@ panel.on("blur", () => {
 /** Centre the panel under the menu bar icon, kept inside that screen. */
 function placePanel() {
   const icon = tray.getBounds();
+  // Tray bounds come in Cocoa coordinates (origin at the bottom-left of the primary
+  // screen); displays, work areas and windows use a top-left origin.
+  const primary = Screen.getPrimaryDisplay();
+  const iconTop = primary.bounds.height - (icon.y + icon.height);
+  const iconBottom = iconTop + icon.height;
   const cx = icon.x + icon.width / 2;
+  const cy = iconTop + icon.height / 2;
   const display =
-    Screen.getAllDisplays().find((d) => cx >= d.bounds.x && cx < d.bounds.x + d.bounds.width) ??
-    Screen.getPrimaryDisplay();
+    Screen.getAllDisplays().find(
+      ({ bounds: b }) => cx >= b.x && cx < b.x + b.width && cy >= b.y && cy < b.y + b.height,
+    ) ?? primary;
   const area = display.workArea;
   const x = Math.round(Math.min(Math.max(cx - PANEL_WIDTH / 2, area.x + 8), area.x + area.width - PANEL_WIDTH - 8));
-  // Tray bounds come in Cocoa coordinates (origin at the bottom-left of the primary
-  // screen); windows and work areas use a top-left origin.
-  const iconBottom = Screen.getPrimaryDisplay().bounds.height - icon.y;
   const y = Math.round(iconBottom + 4);
   panel.setFrame(x, y, PANEL_WIDTH, panelHeight);
 }
