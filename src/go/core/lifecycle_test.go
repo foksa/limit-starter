@@ -376,42 +376,21 @@ func TestInstanceLockAllowsOneCopy(t *testing.T) {
 	again.Close()
 }
 
-func TestLoginItemRunsTheAppAndOldOnesAreRewritten(t *testing.T) {
+func TestOldLoginAgentsAreRemoved(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
-	app := "/Applications/Usage Window Starter.app"
-	if RefreshLoginItem(app) {
-		t.Fatal("rewrote a login item that doesn't exist")
+	if RemoveLoginAgents() {
+		t.Fatal("reported agents that don't exist")
 	}
-	// A login item from a version that ran /usr/bin/open (macOS showed it as "open").
-	if err := os.MkdirAll(agentsDir(), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(loginPlist(), []byte("<plist><string>/usr/bin/open</string></plist>"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if !RefreshLoginItem(app) || RefreshLoginItem(app) {
-		t.Fatal("expected exactly one rewrite")
-	}
-	data, _ := os.ReadFile(loginPlist())
-	for _, want := range []string{app + "/Contents/MacOS/launcher", BundleID, "RunAtLoad"} {
-		if !strings.Contains(string(data), want) {
-			t.Fatalf("login item lacks %q:\n%s", want, data)
-		}
-	}
-	if strings.Contains(string(data), "/usr/bin/open") {
-		t.Fatal("still runs open")
-	}
-}
-
-func TestLoginItemsWithOldNamesAreReplaced(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
 	_ = os.MkdirAll(agentsDir(), 0o755)
-	old := filepath.Join(agentsDir(), "com.usage-window-starter.login.plist")
-	_ = os.WriteFile(old, []byte("<plist/>"), 0o644)
-	if !MigrateLoginItem("/Applications/Usage Window Starter.app") {
-		t.Fatal("old login item not migrated")
+	for _, p := range loginAgents() {
+		_ = os.WriteFile(p, []byte("<plist/>"), 0o644)
 	}
-	if exists(old) || !IsLaunchAtLogin() {
-		t.Fatal("expected only the new login item")
+	if !RemoveLoginAgents() {
+		t.Fatal("agents not found")
+	}
+	for _, p := range loginAgents() {
+		if exists(p) {
+			t.Fatal("left behind:", p)
+		}
 	}
 }

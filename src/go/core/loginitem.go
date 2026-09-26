@@ -1,15 +1,12 @@
 package core
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 )
-
-const loginLabel = "dev.foksa.usage-window-starter.login"
 
 // legacyLabel is the launchd daemon from the CLI-only version; the menu bar app replaces it.
 const legacyLabel = "com.limit-starter"
@@ -19,14 +16,13 @@ func agentsDir() string {
 	return filepath.Join(home, "Library/LaunchAgents")
 }
 
-func loginPlist() string { return filepath.Join(agentsDir(), loginLabel+".plist") }
-
-// oldLoginPlist is the login item from before the rename; it opens the old .app.
-// oldLoginPlists are login items from earlier names; they open the app the old way.
-func oldLoginPlists() []string {
+// loginAgents are the LaunchAgent login items earlier versions wrote. Their
+// entries were named after the program they ran: "open", then "launcher".
+func loginAgents() []string {
 	return []string{
 		filepath.Join(agentsDir(), "com.limit-starter.login.plist"),
 		filepath.Join(agentsDir(), "com.usage-window-starter.login.plist"),
+		filepath.Join(agentsDir(), "dev.foksa.usage-window-starter.login.plist"),
 	}
 }
 
@@ -45,68 +41,6 @@ func AppBundlePath() string {
 	return exe[:i+4]
 }
 
-func IsLaunchAtLogin() bool { return exists(loginPlist()) }
-
-var xmlEscape = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;")
-
-// BundleID is the app's bundle identifier; macOS uses it to show the login item
-// under the app's name.
-const BundleID = "dev.foksa.usage-window-starter"
-
-// loginPlistXML runs the app's own executable rather than /usr/bin/open: macOS
-// names a login item after the program it runs, so with `open` the "background
-// item added" notification and Login Items said "open".
-func loginPlistXML(appPath string) string {
-	return fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key><string>%s</string>
-  <key>ProgramArguments</key>
-  <array>
-    <string>%s</string>
-  </array>
-  <key>AssociatedBundleIdentifiers</key>
-  <array>
-    <string>%s</string>
-  </array>
-  <key>LimitLoadToSessionType</key><string>Aqua</string>
-  <key>RunAtLoad</key><true/>
-</dict>
-</plist>
-`, loginLabel, xmlEscape.Replace(filepath.Join(appPath, "Contents", "MacOS", "launcher")), BundleID)
-}
-
-// RefreshLoginItem rewrites an existing login item that isn't in the current form,
-// e.g. one from a version that started the app with /usr/bin/open.
-func RefreshLoginItem(appPath string) bool {
-	if appPath == "" || !IsLaunchAtLogin() {
-		return false
-	}
-	current, err := os.ReadFile(loginPlist())
-	if err != nil || string(current) == loginPlistXML(appPath) {
-		return false
-	}
-	return SetLaunchAtLogin(true, appPath) == nil
-}
-
-// SetLaunchAtLogin writes a LaunchAgent that starts the app at login (no KeepAlive).
-func SetLaunchAtLogin(enabled bool, appPath string) error {
-	if !enabled {
-		if err := os.Remove(loginPlist()); err != nil && !os.IsNotExist(err) {
-			return err
-		}
-		return nil
-	}
-	if appPath == "" {
-		return errors.New("Launch at login needs the app to run from its .app bundle")
-	}
-	if err := os.MkdirAll(agentsDir(), 0o755); err != nil {
-		return err
-	}
-	return os.WriteFile(loginPlist(), []byte(loginPlistXML(appPath)), 0o644)
-}
-
 // RemoveLegacyDaemon stops and removes the old CLI daemon so it doesn't run checks
 // alongside the app.
 func RemoveLegacyDaemon() bool {
@@ -118,17 +52,15 @@ func RemoveLegacyDaemon() bool {
 	return true
 }
 
-// MigrateLoginItem replaces a login item with an earlier name by the current one.
-func MigrateLoginItem(appPath string) bool {
+// RemoveLoginAgents deletes LaunchAgent login items from earlier versions and
+// reports whether there were any, so the app can register itself instead.
+func RemoveLoginAgents() bool {
 	found := false
-	for _, p := range oldLoginPlists() {
+	for _, p := range loginAgents() {
 		if exists(p) {
 			found = true
 			_ = os.Remove(p)
 		}
-	}
-	if found && appPath != "" {
-		_ = SetLaunchAtLogin(true, appPath)
 	}
 	return found
 }

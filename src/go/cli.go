@@ -56,6 +56,25 @@ func runCLI(args []string) int {
 			ids = append(ids, id)
 		}
 		fmt.Println("Codex: ", strings.Join(ids, ", "))
+	case "login-item": // run the bundled binary: "<app>/Contents/MacOS/main login-item on"
+		arg := "status"
+		if len(args) > 1 {
+			arg = args[1]
+		}
+		var err error
+		switch arg {
+		case "on":
+			err = setLaunchAtLogin(true)
+		case "off":
+			err = setLaunchAtLogin(false)
+		}
+		names := map[int]string{loginItemNotRegistered: "not registered", loginItemEnabled: "enabled",
+			loginItemRequiresApproval: "needs approval in System Settings", loginItemNotFound: "not found"}
+		fmt.Println("login item:", names[loginItemStatus()])
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "error:", err)
+			return 1
+		}
 	case "-h", "--help", "help":
 		fmt.Println(cliUsage)
 	default:

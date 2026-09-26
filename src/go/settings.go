@@ -91,7 +91,7 @@ func settingsHandlers() *rpcHandlers {
 			"getSettings": func(json.RawMessage) (any, error) {
 				return settingsPayload{
 					Config:           core.LoadConfig(),
-					LaunchAtLogin:    core.IsLaunchAtLogin(),
+					LaunchAtLogin:    isLaunchAtLogin(),
 					CanLaunchAtLogin: core.AppBundlePath() != "",
 					ClaudeModels:     core.ClaudeModels,
 					AppVersion:       core.AppVersion,
@@ -117,8 +117,8 @@ func settingsHandlers() *rpcHandlers {
 					return okResult{Error: err.Error()}, nil
 				}
 				cfg, err := configFromView(p.Config)
-				if err == nil && p.LaunchAtLogin != core.IsLaunchAtLogin() {
-					err = core.SetLaunchAtLogin(p.LaunchAtLogin, core.AppBundlePath())
+				if err == nil && p.LaunchAtLogin != isLaunchAtLogin() {
+					err = setLaunchAtLogin(p.LaunchAtLogin)
 				}
 				if err == nil {
 					err = core.SaveConfig(cfg)
