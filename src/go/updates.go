@@ -92,13 +92,17 @@ func (up *Updates) reportLastInstall() {
 // check looks for a new version and downloads it. manual also reports
 // "up to date" and errors.
 func (up *Updates) check(manual bool) {
+	// Claim the check under the lock: panel actions arrive on separate goroutines, and
+	// two checks at once would share the manifest and the download files.
 	up.mu.Lock()
 	if up.phase == "checking" || up.phase == "downloading" || up.phase == "ready" || up.phase == "installing" {
 		up.mu.Unlock()
 		return
 	}
+	up.phase, up.err = "checking", ""
 	up.lastCheck = time.Now()
 	up.mu.Unlock()
+	up.onChange()
 	current := ""
 	if up.u != nil {
 		current = up.u.Info.Version
@@ -119,7 +123,6 @@ func (up *Updates) check(manual bool) {
 		return
 	}
 
-	up.set("checking")
 	res, err := up.u.Check(context.Background())
 	if err != nil {
 		fail(err)
