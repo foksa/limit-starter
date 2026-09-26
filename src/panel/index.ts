@@ -27,8 +27,8 @@ function fmtDay(ms: number | null): string {
   return new Date(ms).toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" });
 }
 
-function bar(pct: number): HTMLElement {
-  const b = el("div", pct >= 90 ? "bar high" : "bar");
+function bar(pct: number, kind = ""): HTMLElement {
+  const b = el("div", ["bar", kind, pct >= 90 ? "high" : ""].filter(Boolean).join(" "));
   const fill = el("i");
   fill.style.width = `${Math.max(0, Math.min(100, pct))}%`;
   b.append(fill);
@@ -85,6 +85,7 @@ function providerRow(p: PanelProvider, s: PanelState, now: number): HTMLElement 
   }
 
   if (p.enabled && p.weekly && !s.resting) {
+    main.append(bar(p.weekly.usedPct, "weekly"));
     main.append(el("div", "detail", `Weekly ${p.weekly.usedPct}% · resets ${fmtDay(p.weekly.resetsAt)}`));
   }
   if (p.enabled && p.error) {

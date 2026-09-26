@@ -273,6 +273,16 @@ label.row:hover {
   background: var(--codex-bar);
 }
 
+/* Weekly: thinner and softer, so the 5h bar stays the main one. */
+.bar.weekly {
+  height: 3px;
+  margin-top: 6px;
+}
+
+.bar.weekly > i {
+  opacity: 0.55;
+}
+
 .bar.high > i {
   background: var(--err) !important;
 }
