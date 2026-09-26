@@ -1,7 +1,6 @@
 package core
 
 import (
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -109,8 +108,9 @@ func nowMs() int64 { return time.Now().UnixMilli() }
 
 // TickProvider checks one provider and, if its session is idle, starts a new one.
 // Mutates st. persist is called as soon as a start succeeds, so the cooldown survives
-// a quit or crash during the confirmation delay.
-func TickProvider(p Provider, cfg Config, st *ProviderState, now int64, persist func(*ProviderState)) {
+// a quit or crash during the confirmation delay. starting, if set, is called when it
+// sends the start message; the start and its confirmation take a couple of minutes.
+func TickProvider(p Provider, cfg Config, st *ProviderState, now int64, persist func(*ProviderState), starting func()) {
 	st.LastCheckAt = now
 	phase := "check"
 	err := func() error {
@@ -127,6 +127,9 @@ func TickProvider(p Provider, cfg Config, st *ProviderState, now int64, persist 
 		}
 
 		phase = "start"
+		if starting != nil {
+			starting()
+		}
 		reply, err := Start[p](cfg)
 		if err != nil {
 			return err
@@ -178,8 +181,9 @@ func TickProvider(p Provider, cfg Config, st *ProviderState, now int64, persist 
 type Scheduler struct {
 	OnChange func()
 
-	mu           sync.Mutex
-	busy         map[Provider]bool
+	mu sync.Mutex
+	// activity is "checking" or "starting" while a provider is busy.
+	activity     map[Provider]string
 	stop         chan struct{}
 	resetTimers  map[Provider]*time.Timer
 	resetRetries map[Provider]int
@@ -191,7 +195,7 @@ func NewScheduler(onChange func()) *Scheduler {
 	}
 	return &Scheduler{
 		OnChange:     onChange,
-		busy:         map[Provider]bool{},
+		activity:     map[Provider]string{},
 		resetTimers:  map[Provider]*time.Timer{},
 		resetRetries: map[Provider]int{},
 	}
@@ -244,10 +248,26 @@ func (s *Scheduler) Stop() {
 	}
 }
 
-func (s *Scheduler) IsBusy(p Provider) bool {
+func (s *Scheduler) IsBusy(p Provider) bool { return s.Activity(p) != "" }
+
+// Activity is what provider p is doing: "checking", "starting", or "" when idle.
+func (s *Scheduler) Activity(p Provider) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.busy[p]
+	return s.activity[p]
+}
+
+func (s *Scheduler) setActivity(p Provider, a string) {
+	s.mu.Lock()
+	s.activity[p] = a
+	s.mu.Unlock()
+	s.OnChange()
+}
+
+// tick runs TickProvider with state persistence and activity reporting.
+func (s *Scheduler) tick(p Provider, cfg Config, st *ProviderState, now int64) {
+	TickProvider(p, cfg, st, now, func(st *ProviderState) { SaveProviderState(p, st) },
+		func() { s.setActivity(p, "starting") })
 }
 
 func (s *Scheduler) running() bool {
@@ -295,7 +315,7 @@ func (s *Scheduler) runWhere(cfg Config, now int64, isDue func(lastCheckAt int64
 		go func(p Provider) {
 			defer wg.Done()
 			s.withProvider(p, func(st *ProviderState) {
-				TickProvider(p, cfg, st, now, func(st *ProviderState) { SaveProviderState(p, st) })
+				s.tick(p, cfg, st, now)
 			})
 		}(p)
 	}
@@ -311,7 +331,7 @@ func (s *Scheduler) StartNow(p Provider) {
 	s.withProvider(p, func(st *ProviderState) {
 		st.LastStartAt = 0
 		st.FailureNotified = false
-		TickProvider(p, cfg, st, nowMs(), func(st *ProviderState) { SaveProviderState(p, st) })
+		s.tick(p, cfg, st, nowMs())
 	})
 }
 
@@ -335,7 +355,11 @@ func (s *Scheduler) TestModel(p Provider, cfg Config) (string, error) {
 		Log("provider", p, "event", "test", "model", cfg.Model(p), "reply", reply, "countedAsStart", wasIdle)
 	})
 	if !ok {
-		return "", errors.New(Label[p] + " is busy with a check, try again in a moment")
+		doing := "a check"
+		if s.Activity(p) == "starting" {
+			doing = "starting a session"
+		}
+		return "", fmt.Errorf("%s is busy with %s, try again in a moment", Label[p], doing)
 	}
 	return reply, err
 }
@@ -344,11 +368,11 @@ func (s *Scheduler) TestModel(p Provider, cfg Config) (string, error) {
 // clobbering the other provider. Returns false when p is already busy.
 func (s *Scheduler) withProvider(p Provider, fn func(st *ProviderState)) bool {
 	s.mu.Lock()
-	if s.busy[p] {
+	if s.activity[p] != "" {
 		s.mu.Unlock()
 		return false
 	}
-	s.busy[p] = true
+	s.activity[p] = "checking"
 	s.mu.Unlock()
 	s.OnChange()
 
@@ -360,7 +384,7 @@ func (s *Scheduler) withProvider(p Provider, fn func(st *ProviderState)) bool {
 		SaveProviderState(p, st)
 		s.planResetCheck(p, st.LastSnapshot)
 		s.mu.Lock()
-		delete(s.busy, p)
+		delete(s.activity, p)
 		s.mu.Unlock()
 		s.OnChange()
 	}()
@@ -415,6 +439,6 @@ func (s *Scheduler) checkAtReset(p Provider) {
 	Log("provider", p, "event", "reset-check", "retry", retry)
 	// If a check is already running, its own completion plans the next reset check.
 	s.withProvider(p, func(st *ProviderState) {
-		TickProvider(p, cfg, st, nowMs(), func(st *ProviderState) { SaveProviderState(p, st) })
+		s.tick(p, cfg, st, nowMs())
 	})
 }

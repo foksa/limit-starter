@@ -336,3 +336,24 @@ func TestBareCommandNamesResolveOnTheCliPath(t *testing.T) {
 		t.Fatalf("%+v", r)
 	}
 }
+
+func TestActivityShowsStartingDuringStartAndConfirmation(t *testing.T) {
+	setup(t)
+	var seen []string
+	s := NewScheduler(nil)
+	var checks int32
+	Check[Codex] = func(Config) (Snapshot, error) {
+		if atomic.AddInt32(&checks, 1) == 1 {
+			seen = append(seen, s.Activity(Codex))
+			return idleSnap, nil
+		}
+		seen = append(seen, s.Activity(Codex)) // the confirmation check
+		return activeSnap, nil
+	}
+	Start[Codex] = func(Config) (string, error) { seen = append(seen, s.Activity(Codex)); return "ok", nil }
+	s.RunDue(true, nowMs())
+	want := []string{"checking", "starting", "starting"}
+	if strings.Join(seen, ",") != strings.Join(want, ",") || s.Activity(Codex) != "" {
+		t.Fatalf("activity = %v, after = %q", seen, s.Activity(Codex))
+	}
+}

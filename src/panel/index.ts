@@ -64,6 +64,10 @@ function providerRow(p: PanelProvider, s: PanelState, now: number): HTMLElement 
 
   if (!p.enabled) {
     main.append(el("div", "detail", "Disabled in Settings"));
+  } else if (p.activity === "starting") {
+    // The start message plus a 90 s wait: right after a start, Codex can't yet tell
+    // a new session from none.
+    main.append(el("div", "detail", "Starting 5h session… confirming in about a minute"));
   } else if (p.busy) {
     main.append(el("div", "detail", "Checking…"));
   } else if (s.resting) {

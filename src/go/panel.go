@@ -38,6 +38,7 @@ type panelProvider struct {
 	Model    string            `json:"model"`
 	Enabled  bool              `json:"enabled"`
 	Busy     bool              `json:"busy"`
+	Activity string            `json:"activity"` // "checking", "starting" or ""
 	FiveHour *core.LimitWindow `json:"fiveHour"`
 	Weekly   *core.LimitWindow `json:"weekly"`
 	Error    string            `json:"error,omitempty"`
@@ -59,7 +60,7 @@ func panelState() panelStatePayload {
 	state := core.LoadState()
 	var s panelStatePayload
 	for _, p := range core.Providers {
-		pp := panelProvider{ID: p, Label: core.Label[p], Model: cfg.Model(p), Enabled: cfg.Enabled(p), Busy: app.scheduler.IsBusy(p)}
+		pp := panelProvider{ID: p, Label: core.Label[p], Model: cfg.Model(p), Enabled: cfg.Enabled(p), Busy: app.scheduler.IsBusy(p), Activity: app.scheduler.Activity(p)}
 		if st := state[p]; st != nil {
 			pp.Error = st.LastError
 			if st.LastSnapshot != nil {

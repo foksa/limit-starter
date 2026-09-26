@@ -36,6 +36,8 @@ export interface PanelProvider {
   model: string;
   enabled: boolean;
   busy: boolean;
+  /** what a busy provider is doing; a start includes a ~90 s confirmation wait */
+  activity: "checking" | "starting" | "";
   /** null until the first check */
   fiveHour: LimitWindow | null;
   weekly: LimitWindow | null;
