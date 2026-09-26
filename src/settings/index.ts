@@ -150,6 +150,7 @@ async function init() {
   input("ahStart").value = config.activeHours?.start ?? "08:00";
   input("ahEnd").value = config.activeHours?.end ?? "23:59";
   input("launchAtLogin").checked = s.launchAtLogin;
+  $("version").textContent = `Version ${s.appVersion}`;
   input("launchAtLogin").disabled = !s.canLaunchAtLogin;
   $("loginHint").textContent = s.canLaunchAtLogin
     ? "Open the app in the background when you log in"

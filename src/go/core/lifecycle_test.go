@@ -1,6 +1,7 @@
 package core
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -356,4 +357,21 @@ func TestActivityShowsStartingDuringStartAndConfirmation(t *testing.T) {
 	if strings.Join(seen, ",") != strings.Join(want, ",") || s.Activity(Codex) != "" {
 		t.Fatalf("activity = %v, after = %q", seen, s.Activity(Codex))
 	}
+}
+
+func TestInstanceLockAllowsOneCopy(t *testing.T) {
+	setup(t)
+	first, _, err := AcquireInstanceLock()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, pid, err := AcquireInstanceLock(); !errors.Is(err, ErrAlreadyRunning) || pid != os.Getpid() {
+		t.Fatalf("second copy: pid=%d err=%v", pid, err)
+	}
+	first.Close() // quitting (or crashing) releases it
+	again, _, err := AcquireInstanceLock()
+	if err != nil {
+		t.Fatal("lock not released:", err)
+	}
+	again.Close()
 }

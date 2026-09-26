@@ -2,11 +2,14 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"electrobun"
@@ -27,9 +30,24 @@ var app struct {
 	trayID    uint32
 	scheduler *core.Scheduler
 	updates   *Updates
+	lock      *os.File
 }
 
 func runApp() error {
+	// One copy per data folder: two would both check and send start messages.
+	lock, pid, err := core.AcquireInstanceLock()
+	if errors.Is(err, core.ErrAlreadyRunning) {
+		// Show the running copy's panel instead, so opening the app again isn't a no-op.
+		if pid > 0 {
+			_ = syscall.Kill(pid, syscall.SIGUSR1)
+		}
+		return nil
+	}
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "[usage-window-starter] instance lock:", err)
+	}
+	app.lock = lock // held until the process exits
+
 	c, err := electrobun.LoadCore()
 	if err != nil {
 		return err
@@ -97,6 +115,14 @@ func startUI() {
 	if os.Getenv("USAGE_WINDOW_STARTER_OPEN_PANEL") != "" {
 		time.AfterFunc(1500*time.Millisecond, showPanel)
 	}
+	// A second copy that was started signals this one to show its panel.
+	shows := make(chan os.Signal, 1)
+	signal.Notify(shows, syscall.SIGUSR1)
+	go func() {
+		for range shows {
+			showPanel()
+		}
+	}()
 	// Keep the countdown in the menu bar fresh between checks.
 	go func() {
 		for range time.Tick(30 * time.Second) {

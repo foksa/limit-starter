@@ -114,6 +114,7 @@ function render(s: PanelState | null = state) {
   resting.textContent = `Resting until ${s.activeFrom} — no checks outside active hours`;
 
   $<HTMLInputElement>("autoStart").checked = s.autoStart;
+  $("version").textContent = s.appVersion === "dev" ? "dev" : `v${s.appVersion}`;
   $("check").classList.toggle("spin", s.providers.some((p) => p.busy));
 
   const up = $<HTMLButtonElement>("update");

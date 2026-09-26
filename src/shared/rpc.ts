@@ -7,6 +7,7 @@ export interface SettingsPayload {
   /** false when running outside a .app bundle (dev), where launch-at-login can't work */
   canLaunchAtLogin: boolean;
   claudeModels: ModelOption[];
+  appVersion: string;
 }
 
 export type SettingsRPC = {
@@ -49,6 +50,7 @@ export interface PanelState {
   autoStart: boolean;
   /** outside active hours: nothing is checked or started */
   resting: boolean;
+  appVersion: string;
   activeFrom: string | null;
   update: { phase: UpdatePhase; version: string };
 }

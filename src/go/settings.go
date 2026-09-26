@@ -24,6 +24,7 @@ type settingsPayload struct {
 	LaunchAtLogin    bool               `json:"launchAtLogin"`
 	CanLaunchAtLogin bool               `json:"canLaunchAtLogin"` // false outside a .app bundle (dev)
 	ClaudeModels     []core.ModelOption `json:"claudeModels"`
+	AppVersion       string             `json:"appVersion"`
 }
 
 type okResult struct {
@@ -93,6 +94,7 @@ func settingsHandlers() *rpcHandlers {
 					LaunchAtLogin:    core.IsLaunchAtLogin(),
 					CanLaunchAtLogin: core.AppBundlePath() != "",
 					ClaudeModels:     core.ClaudeModels,
+					AppVersion:       core.AppVersion,
 				}, nil
 			},
 			"listCodexModels": func(raw json.RawMessage) (any, error) {

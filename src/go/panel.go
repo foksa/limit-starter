@@ -48,6 +48,7 @@ type panelStatePayload struct {
 	Providers  []panelProvider `json:"providers"`
 	AutoStart  bool            `json:"autoStart"`
 	Resting    bool            `json:"resting"`
+	AppVersion string          `json:"appVersion"`
 	ActiveFrom *string         `json:"activeFrom"`
 	Update     struct {
 		Phase   string `json:"phase"`
@@ -71,6 +72,7 @@ func panelState() panelStatePayload {
 		s.Providers = append(s.Providers, pp)
 	}
 	s.AutoStart = cfg.AutoStart
+	s.AppVersion = core.AppVersion
 	s.Resting = !core.InActiveHours(cfg.ActiveHours, time.Now().UnixMilli())
 	if cfg.ActiveHours != nil {
 		s.ActiveFrom = &cfg.ActiveHours.Start

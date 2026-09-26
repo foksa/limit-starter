@@ -359,6 +359,12 @@ label.row:hover {
   transform: translateX(12px);
 }
 
+.version {
+  color: var(--muted);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
 #update.ready .glyph {
   background: var(--accent);
   color: #fff;
