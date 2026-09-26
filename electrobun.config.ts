@@ -34,7 +34,7 @@ export default {
     },
     mac: {
       bundleCEF: false,
-      createDmg: false,
+      createDmg: true,
     },
   },
   release: {
