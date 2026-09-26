@@ -28,4 +28,9 @@ rm -rf artifacts
 hutch run build
 
 gh release create "$tag" artifacts/* --target "$(git rev-parse HEAD)" --title "$tag" --generate-notes
+
+# Don't leave a launchable copy of the app in the project: Spotlight finds it by name,
+# and when started it registers itself as the installed app, which blocks updates to
+# the copy in /Applications. The release files stay in artifacts/.
+rm -rf build/stable-macos-arm64/*.app
 echo "Published $tag"
