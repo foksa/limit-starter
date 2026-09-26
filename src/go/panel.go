@@ -28,9 +28,28 @@ var panel struct {
 	// blurredAt is when the panel last hid on losing focus; a click on the icon
 	// itself causes that too.
 	blurredAt time.Time
+	// idle closes the hidden panel after panelIdle, which ends its WebKit processes
+	// (about 40 MB). pendingShow: a new panel is shown once its page has loaded.
+	idle        *time.Timer
+	pendingShow bool
 }
 
-func init() { panel.height = 320 }
+// panelIdle is how long a hidden panel is kept for instant reopening.
+var panelIdle = 3 * time.Minute
+
+func init() {
+	panel.height = 320
+	// For testing: USAGE_WINDOW_STARTER_PANEL_IDLE=5s.
+	if d, err := time.ParseDuration(os.Getenv("USAGE_WINDOW_STARTER_PANEL_IDLE")); err == nil && d > 0 {
+		panelIdle = d
+	}
+}
+
+func panelIDs() (windowID, webviewID uint32) {
+	panel.mu.Lock()
+	defer panel.mu.Unlock()
+	return panel.windowID, panel.webviewID
+}
 
 type panelProvider struct {
 	ID       core.Provider     `json:"id"`
@@ -82,7 +101,8 @@ func panelState() panelStatePayload {
 }
 
 func panelVisible() bool {
-	return panel.windowID != 0 && app.core.IsWindowVisible(panel.windowID)
+	id, _ := panelIDs()
+	return id != 0 && app.core.IsWindowVisible(id)
 }
 
 func createPanel() {
@@ -140,16 +160,39 @@ func createPanel() {
 				panel.mu.Lock()
 				changed := r.Height != panel.height
 				panel.height = r.Height
-				x, y := panel.x, panel.y
+				x, y, id := panel.x, panel.y, panel.windowID
+				pending := panel.pendingShow
+				panel.pendingShow = false
 				panel.mu.Unlock()
-				if changed && panelVisible() {
-					_ = app.core.SetWindowFrame(panel.windowID, electrobun.NewRect(x, y, panelWidth, r.Height))
+				switch {
+				case pending: // the new panel's page is ready and has its height
+					revealPanel()
+				case changed && panelVisible():
+					_ = app.core.SetWindowFrame(id, electrobun.NewRect(x, y, panelWidth, r.Height))
 				}
 			},
 			"close": func(json.RawMessage) { hidePanel() },
 		},
 	})
+	panel.mu.Lock()
 	panel.windowID, panel.webviewID = windowID, webviewID
+	panel.mu.Unlock()
+}
+
+// destroyPanel closes the hidden panel; the next click creates it again.
+func destroyPanel() {
+	if panelVisible() {
+		return
+	}
+	panel.mu.Lock()
+	windowID, webviewID := panel.windowID, panel.webviewID
+	panel.windowID, panel.webviewID, panel.pendingShow = 0, 0, false
+	panel.mu.Unlock()
+	if windowID == 0 {
+		return
+	}
+	forgetView(webviewID)
+	_ = app.core.CloseWindow(windowID)
 }
 
 // placePanel centres the panel under the menu bar icon, kept inside that screen.
@@ -182,30 +225,66 @@ func placePanel() {
 	x := math.Round(math.Min(math.Max(cx-panelWidth/2, area.X+8), area.X+area.Width-panelWidth-8))
 	y := math.Round(iconTop + icon.Height + 4)
 	panel.mu.Lock()
-	h := panel.height
+	h, id := panel.height, panel.windowID
 	panel.x, panel.y = x, y
 	panel.mu.Unlock()
-	_ = c.SetWindowFrame(panel.windowID, electrobun.NewRect(x, y, panelWidth, h))
+	_ = c.SetWindowFrame(id, electrobun.NewRect(x, y, panelWidth, h))
 }
 
 func showPanel() {
-	if panel.windowID == 0 {
-		return
+	panel.mu.Lock()
+	if panel.idle != nil {
+		panel.idle.Stop()
 	}
+	created := panel.windowID != 0
+	panel.mu.Unlock()
 	cfg := core.LoadConfig()
 	if cfg.RefreshOnOpenSec > 0 {
 		go app.scheduler.Refresh(time.Duration(cfg.RefreshOnOpenSec)*time.Second, time.Now().UnixMilli())
 	}
-	sendMessage(panel.webviewID, "state", panelState())
+	if created {
+		revealPanel()
+		return
+	}
+	// Show it once the page reports its height, so it doesn't appear empty.
+	createPanel()
+	panel.mu.Lock()
+	panel.pendingShow = true
+	panel.mu.Unlock()
+	time.AfterFunc(1500*time.Millisecond, func() {
+		panel.mu.Lock()
+		pending := panel.pendingShow
+		panel.pendingShow = false
+		panel.mu.Unlock()
+		if pending {
+			revealPanel()
+		}
+	})
+}
+
+func revealPanel() {
+	windowID, webviewID := panelIDs()
+	if windowID == 0 {
+		return
+	}
+	sendMessage(webviewID, "state", panelState())
 	placePanel()
-	_ = app.core.ShowWindow(panel.windowID, true)
-	_ = app.core.ActivateWindow(panel.windowID)
+	_ = app.core.ShowWindow(windowID, true)
+	_ = app.core.ActivateWindow(windowID)
 }
 
 func hidePanel() {
-	if panel.windowID != 0 {
-		_ = app.core.HideWindow(panel.windowID)
+	windowID, _ := panelIDs()
+	if windowID == 0 {
+		return
 	}
+	_ = app.core.HideWindow(windowID)
+	panel.mu.Lock()
+	if panel.idle != nil {
+		panel.idle.Stop()
+	}
+	panel.idle = time.AfterFunc(panelIdle, destroyPanel)
+	panel.mu.Unlock()
 }
 
 func togglePanel() {

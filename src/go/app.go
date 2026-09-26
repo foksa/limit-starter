@@ -103,8 +103,7 @@ func startUI() {
 		fmt.Fprintln(os.Stderr, "[usage-window-starter] tray:", err)
 		return
 	}
-	app.trayID = trayID
-	createPanel()
+	app.trayID = trayID // the panel is created on first click (see destroyPanel)
 
 	refreshTray()
 	app.scheduler.Run()
@@ -210,7 +209,8 @@ func refreshTray() {
 	defer refreshMu.Unlock()
 	_ = app.core.SetTrayTitle(app.trayID, trayTitle())
 	if panelVisible() {
-		sendMessage(panel.webviewID, "state", panelState())
+		_, webviewID := panelIDs()
+		sendMessage(webviewID, "state", panelState())
 	}
 }
 
