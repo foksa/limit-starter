@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -35,6 +36,7 @@ func newUpdates(bundle electrobun.BundlePaths, onChange func()) *Updates {
 		up.err = err.Error()
 	} else {
 		core.AppVersion = u.Info.Version
+		u.HelperLog = filepath.Join(core.HomeDir, "update-helper.log")
 	}
 	return up
 }

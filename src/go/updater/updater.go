@@ -92,6 +92,8 @@ var (
 type Updater struct {
 	Info   LocalInfo
 	exeDir string
+	// HelperLog, if set, receives the native update helper's output.
+	HelperLog string
 
 	manifest *Manifest
 }
@@ -445,12 +447,37 @@ func (u *Updater) Apply() error {
 	}
 	cmd := exec.Command(helper, "--apply-update", planPath, "--quiet")
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	if u.HelperLog != "" {
+		if f, err := os.OpenFile(u.HelperLog, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644); err == nil {
+			fmt.Fprintf(f, "--- %s apply %s -> %s (%s)\n", time.Now().Format(time.RFC3339), u.Info.Version, p.Version, tx)
+			cmd.Stdout, cmd.Stderr = f, f
+			defer f.Close() // the child keeps its own copy
+		}
+	}
 	if err := cmd.Start(); err != nil {
 		os.Remove(planPath)
 		os.Remove(helper)
 		return fmt.Errorf("failed to start update helper: %w", err)
 	}
-	return cmd.Process.Release()
+	_ = cmd.Process.Release()
+	startRelauncher(plan.ResultPath, bundle)
+	return nil
+}
+
+// relaunchScript waits for the helper's result, then opens the app unless it's
+// already running. The helper relaunches the app itself, but it does so within
+// milliseconds of swapping the bundle, and macOS can ignore that `open`.
+const relaunchScript = `result="$1"; app="$2"; i=0
+while [ ! -s "$result" ] && [ $i -lt 180 ]; do sleep 1; i=$((i+1)); done
+sleep 3
+pgrep -f "$app/Contents/MacOS/main" >/dev/null || /usr/bin/open "$app"`
+
+func startRelauncher(resultPath, bundle string) {
+	cmd := exec.Command("/bin/sh", "-c", relaunchScript, "relaunch", resultPath, bundle)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	if cmd.Start() == nil {
+		_ = cmd.Process.Release()
+	}
 }
 
 // NativeResult is what Electrobun's update helper writes after an install attempt.
