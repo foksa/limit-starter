@@ -33,6 +33,8 @@ func newUpdates(bundle electrobun.BundlePaths, onChange func()) *Updates {
 	up := &Updates{u: u, phase: "idle", onChange: onChange}
 	if err != nil {
 		up.err = err.Error()
+	} else {
+		core.AppVersion = u.Info.Version
 	}
 	return up
 }

@@ -34,6 +34,9 @@ type RateLimitsResult struct {
 // the time elapsed.
 const IdleToleranceMs = 45_000
 
+// AppVersion is reported to the Codex app-server; the app sets it from version.json.
+var AppVersion = "dev"
+
 func toWindow(w *rpcWindow, now int64) LimitWindow {
 	if w == nil {
 		return LimitWindow{}
@@ -116,7 +119,7 @@ func AppServerRequest(bin, method string, params any, timeout time.Duration, out
 	enc := json.NewEncoder(stdin)
 	for _, msg := range []any{
 		map[string]any{"method": "initialize", "id": 0, "params": map[string]any{
-			"clientInfo": map[string]any{"name": "usage-window-starter", "version": "0.2.0"},
+			"clientInfo": map[string]any{"name": "usage-window-starter", "version": AppVersion},
 		}},
 		map[string]any{"method": "initialized"},
 		req,

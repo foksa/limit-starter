@@ -4,7 +4,7 @@ export default {
   app: {
     name: "Usage Window Starter",
     identifier: "dev.usage-window-starter.app",
-    version: "0.2.0",
+    version: "0.3.0",
   },
   runtime: {
     // It's a menu bar app: closing the settings window must not quit it.
