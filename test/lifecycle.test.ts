@@ -36,11 +36,15 @@ describe("config file", () => {
       intervalMin: "abc",
       activeHours: { start: "25:99", end: "08:00" },
       codex: { model: "", reasoningEffort: "high", enabled: "yes" },
+      refreshOnOpenSec: -5,
+      trayShowTimes: "no",
     });
     const d = defaultConfig();
     expect(cfg.autoStart).toBe(false);
     expect(cfg.intervalMin).toBe(d.intervalMin);
     expect(cfg.activeHours).toBeNull();
+    expect(cfg.refreshOnOpenSec).toBe(0);
+    expect(cfg.trayShowTimes).toBe(d.trayShowTimes);
     expect(cfg.codex).toEqual({ ...d.codex, reasoningEffort: "high" });
   });
 
@@ -111,6 +115,18 @@ describe("scheduler lifecycle", () => {
     expect(checks).toBe(1);
     await s.runDue(true, new Date(2026, 8, 26, 3, 0).getTime()); // "Check now" still works at night
     expect(checks).toBe(2);
+  });
+
+  test("opening the panel checks only providers whose last check is too old", async () => {
+    saveConfig({ ...loadConfig(), claude: { ...loadConfig().claude, enabled: true } });
+    const checked: string[] = [];
+    check.claude = async () => (checked.push("claude"), active);
+    check.codex = async () => (checked.push("codex"), active);
+    const now = Date.now();
+    saveProviderState("claude", { lastCheckAt: now - 30_000 });
+    saveProviderState("codex", { lastCheckAt: now - 90_000 });
+    await new Scheduler().refresh(60_000, now);
+    expect(checked).toEqual(["codex"]);
   });
 
   test("state is saved even when the check throws", async () => {

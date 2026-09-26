@@ -1,7 +1,8 @@
 import type { RPCSchema } from "electrobun/main";
 import type { Config } from "../core/config";
 import type { ModelOption } from "../core/providers/codex";
-import type { Provider } from "../core/types";
+import type { LimitWindow, Provider } from "../core/types";
+import type { UpdatePhase } from "../bun/updates";
 
 export interface SettingsPayload {
   config: Config;
@@ -29,5 +30,50 @@ export type SettingsRPC = {
   webview: RPCSchema<{
     requests: {};
     messages: {};
+  }>;
+};
+
+export interface PanelProvider {
+  id: Provider;
+  label: string;
+  model: string;
+  enabled: boolean;
+  busy: boolean;
+  /** null until the first check */
+  fiveHour: LimitWindow | null;
+  weekly: LimitWindow | null;
+  error?: string;
+}
+
+export interface PanelState {
+  providers: PanelProvider[];
+  autoStart: boolean;
+  /** outside active hours: nothing is checked or started */
+  resting: boolean;
+  activeFrom: string | null;
+  update: { phase: UpdatePhase; version: string };
+}
+
+export type PanelAction =
+  | { name: "check" | "toggleAuto" | "settings" | "log" | "updateCheck" | "updateInstall" | "quit" }
+  | { name: "start"; provider: Provider };
+
+export type PanelRPC = {
+  bun: RPCSchema<{
+    requests: {
+      getState: { params: {}; response: PanelState };
+    };
+    messages: {
+      action: PanelAction;
+      /** content height, so the window can fit it */
+      resize: { height: number };
+      close: {};
+    };
+  }>;
+  webview: RPCSchema<{
+    requests: {};
+    messages: {
+      state: PanelState;
+    };
   }>;
 };

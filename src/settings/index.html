@@ -31,6 +31,14 @@
           <span class="inline"><input type="time" id="ahStart" /> – <input type="time" id="ahEnd" /></span>
         </div>
         <label class="row">
+          <span>Check when opening the panel<small>If the last check is older than this. 0 turns it off.</small></span>
+          <span class="inline"><input type="number" id="refreshOnOpenSec" min="0" max="3600" step="1" /> sec</span>
+        </label>
+        <label class="row">
+          <span>Show time left in the menu bar<small>Off shows just the icon</small></span>
+          <input type="checkbox" class="switch" id="trayShowTimes" />
+        </label>
+        <label class="row">
           <span>Launch at login<small id="loginHint"></small></span>
           <input type="checkbox" class="switch" id="launchAtLogin" />
         </label>

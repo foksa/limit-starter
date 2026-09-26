@@ -12,6 +12,10 @@ export interface Config {
   intervalMin: number;
   /** e.g. { start: "08:00", end: "24:00" }; null = always */
   activeHours: { start: string; end: string } | null;
+  /** opening the panel checks providers whose last check is older than this; 0 = never */
+  refreshOnOpenSec: number;
+  /** show time left in the menu bar next to the icon */
+  trayShowTimes: boolean;
   claude: { enabled: boolean; bin: string; model: string };
   codex: { enabled: boolean; bin: string; model: string; reasoningEffort: string };
 }
@@ -26,6 +30,8 @@ export function defaultConfig(): Config {
     autoStart: true,
     intervalMin: 10,
     activeHours: null,
+    refreshOnOpenSec: 60,
+    trayShowTimes: true,
     claude: {
       enabled: true,
       bin: findBin("claude", [join(home, ".local/bin/claude"), "/opt/homebrew/bin/claude", "/usr/local/bin/claude"]),
@@ -52,6 +58,7 @@ export function sanitizeConfig(raw: unknown, defaults = defaultConfig()): Config
   const codex = isObj(u.codex) ? u.codex : {};
   const ah = u.activeHours;
   const interval = Number(u.intervalMin);
+  const refresh = Number(u.refreshOnOpenSec);
   return {
     autoStart: bool(u.autoStart, defaults.autoStart),
     intervalMin: Number.isFinite(interval) ? Math.min(120, Math.max(1, Math.round(interval))) : defaults.intervalMin,
@@ -59,6 +66,8 @@ export function sanitizeConfig(raw: unknown, defaults = defaultConfig()): Config
       isObj(ah) && typeof ah.start === "string" && typeof ah.end === "string" && HHMM.test(ah.start) && HHMM.test(ah.end)
         ? { start: ah.start, end: ah.end }
         : null,
+    refreshOnOpenSec: Number.isFinite(refresh) ? Math.min(3600, Math.max(0, Math.round(refresh))) : defaults.refreshOnOpenSec,
+    trayShowTimes: bool(u.trayShowTimes, defaults.trayShowTimes),
     claude: {
       enabled: bool(claude.enabled, defaults.claude.enabled),
       bin: str(claude.bin, defaults.claude.bin),

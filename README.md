@@ -4,9 +4,9 @@ A macOS menu bar app, built with [Electrobun](https://framework.blackboard.sh/el
 
 Besides the regular check interval (10 min by default), it checks once more right after each running session's reported reset time: 30 s later for Codex, which reports exact seconds, and 90 s for Claude, whose `/usage` shows minutes only. That way the next session starts within about a minute of the reset.
 
-The menu bar shows the time left in each running 5h session, for example `C 4:30 · X 2:18`. It shows `–` when a session is idle, `…` while checking, and `!` after an error. The menu has details for each provider, **Check now**, **Start … 5h session now**, an **Auto-start** toggle, **Settings…**, **Open log**, and **Check for updates…**.
+The menu bar shows the time left in each running 5h session, for example `C 4:30 · X 2:18`. It shows `–` when a session is idle or outside active hours, `…` while checking, and `!` after an error. Clicking it opens a panel with each provider's 5h and weekly usage, a **Start** button when a session is idle, **Check now** (↻), **Settings** (⚙), an **Auto-start** switch, **Check for updates…**, **Open log**, and **Quit**. Click outside it or press Esc to close it.
 
-It checks for a new version once a day and downloads it in the background. When it's ready, you get a notification and the menu offers **Install update … & restart**.
+It checks for a new version once a day and downloads it in the background. When it's ready, you get a notification and the panel offers **Install version … & restart**.
 
 It uses only the official CLIs, run headless, with your subscription login. There are no direct API calls:
 
@@ -27,7 +27,7 @@ bun run build      # hutch run build: "build/stable-macos-arm64/Usage Window Sta
 bun test           # parsers + scheduling rules
 bun run typecheck
 ```
-`USAGE_WINDOW_STARTER_OPEN_SETTINGS=1` opens the settings window on launch. With the built app, run `open --env USAGE_WINDOW_STARTER_OPEN_SETTINGS=1 <app>`.
+`USAGE_WINDOW_STARTER_OPEN_SETTINGS=1` opens the settings window on launch, and `USAGE_WINDOW_STARTER_OPEN_PANEL=1` opens the panel. With the built app, run `open --env USAGE_WINDOW_STARTER_OPEN_SETTINGS=1 <app>`.
 
 Hutch installs to `~/.hutch/bin`. Run `hutch electrobun sync` once after cloning to create the `.hutch/devkit` types.
 

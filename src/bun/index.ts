@@ -1,6 +1,6 @@
-import { BrowserView, BrowserWindow, Tray, Utils } from "electrobun/main";
+import { BrowserView, BrowserWindow, Screen, Tray, Utils } from "electrobun/main";
 import { loadConfig, saveConfig } from "../core/config";
-import { fmtDuration, fmtShort, fmtTime } from "../core/format";
+import { fmtShort } from "../core/format";
 import { appBundlePath, isLaunchAtLogin, migrateLoginItem, removeLegacyDaemon, setLaunchAtLogin } from "../core/loginItem";
 import { notify, setNotifier } from "../core/notify";
 import { LOG_FILE } from "../core/paths";
@@ -8,8 +8,8 @@ import { CLAUDE_MODELS } from "../core/providers/claude";
 import { listCodexModels } from "../core/providers/codex";
 import { inActiveHours, LABEL, Scheduler } from "../core/scheduler";
 import { loadState } from "../core/state";
-import { PROVIDERS, type Provider, type ProviderState } from "../core/types";
-import type { SettingsRPC } from "../shared/rpc";
+import { PROVIDERS, type Provider } from "../core/types";
+import type { PanelAction, PanelRPC, PanelState, SettingsRPC } from "../shared/rpc";
 import { Updates } from "./updates";
 
 Utils.setDockIconVisible(false);
@@ -35,9 +35,15 @@ const SHORT: Record<Provider, string> = { claude: "C", codex: "X" };
 /**
  * Menu bar text: time left in each running 5h window, e.g. "C 4:49 · X 2:38".
  * Outside active hours nothing is checked, so it shows "C – · X –" instead of stale data.
+ * With times turned off it's just the icon, plus "!" after an error and "⏸" when paused.
  */
 function trayTitle(): string {
   const cfg = loadConfig();
+  if (!cfg.trayShowTimes) {
+    const state = loadState();
+    const failing = PROVIDERS.some((p) => cfg[p].enabled && state[p]?.lastError);
+    return [failing ? "!" : "", cfg.autoStart ? "" : "⏸"].filter(Boolean).join(" ");
+  }
   const state = loadState();
   const now = Date.now();
   const resting = !inActiveHours(cfg, now);
@@ -55,97 +61,147 @@ function trayTitle(): string {
   return cfg.autoStart ? title : `${title} ⏸`;
 }
 
-function providerLines(p: Provider, st: ProviderState | undefined, now: number): string[] {
+function panelState(): PanelState {
   const cfg = loadConfig();
-  const head = `${LABEL[p]} · ${cfg[p].model}`;
-  if (!cfg[p].enabled) return [`${head} — disabled`];
-  if (scheduler.isBusy(p)) return [`${head} — checking…`];
-  const lines: string[] = [];
-  const snap = st?.lastSnapshot;
-  const w = snap?.fiveHour;
-  if (!w) lines.push(`${head} — not checked yet`);
-  else if (!w.active || (w.resetsAt !== null && w.resetsAt <= now)) lines.push(`${head} — 5h session idle`);
-  else
-    lines.push(
-      `${head} — ${w.usedPct}% used, resets ${fmtTime(w.resetsAt)}` +
-        (w.resetsAt !== null ? ` (${fmtDuration(w.resetsAt - now)})` : ""),
-    );
-  if (snap?.weekly) lines.push(`    weekly ${snap.weekly.usedPct}%` + (snap.weekly.resetsAt ? `, resets ${new Date(snap.weekly.resetsAt).toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" })}` : ""));
-  if (st?.lastError) lines.push(`    ⚠︎ ${st.lastError.slice(0, 70)}`);
-  if (st?.lastCheckAt) lines.push(`    checked ${fmtTime(st.lastCheckAt)}${st.lastStartAt ? ` · last started ${fmtTime(st.lastStartAt)}` : ""}`);
-  return lines;
-}
-
-function updateItem() {
-  switch (updates.phase) {
-    case "checking":
-      return { type: "normal", label: "Checking for updates…", enabled: false };
-    case "downloading":
-      return { type: "normal", label: `Downloading version ${updates.version}…`, enabled: false };
-    case "ready":
-      return { type: "normal", label: `Install update ${updates.version} & restart`, action: "update-install" };
-    default:
-      return { type: "normal", label: "Check for updates…", action: "update-check" };
-  }
+  const state = loadState();
+  return {
+    providers: PROVIDERS.map((p) => {
+      const st = state[p];
+      return {
+        id: p,
+        label: LABEL[p],
+        model: cfg[p].model,
+        enabled: cfg[p].enabled,
+        busy: scheduler.isBusy(p),
+        fiveHour: st?.lastSnapshot?.fiveHour ?? null,
+        weekly: st?.lastSnapshot?.weekly ?? null,
+        error: st?.lastError,
+      };
+    }),
+    autoStart: cfg.autoStart,
+    resting: !inActiveHours(cfg, Date.now()),
+    activeFrom: cfg.activeHours?.start ?? null,
+    update: { phase: updates.phase, version: updates.version },
+  };
 }
 
 function refreshTray() {
-  const cfg = loadConfig();
-  const state = loadState();
-  const now = Date.now();
   tray.setTitle(trayTitle());
-
-  const info = (label: string) => ({ type: "normal" as const, label, enabled: false });
-  const items: any[] = [];
-  for (const p of PROVIDERS) {
-    items.push(...providerLines(p, state[p], now).map(info));
-    items.push({ type: "divider" });
-  }
-  items.push({ type: "normal", label: "Check now", action: "check" });
-  for (const p of PROVIDERS) {
-    const w = state[p]?.lastSnapshot?.fiveHour;
-    const idle = !w || !w.active || (w.resetsAt !== null && w.resetsAt <= now);
-    items.push({
-      type: "normal",
-      label: `Start ${LABEL[p]} 5h session now`,
-      action: `start:${p}`,
-      enabled: cfg[p].enabled && idle && !scheduler.isBusy(p),
-    });
-  }
-  items.push(
-    { type: "divider" },
-    { type: "normal", label: "Auto-start 5h sessions", action: "toggle-auto", checked: cfg.autoStart },
-    { type: "normal", label: "Settings…", action: "settings" },
-    { type: "normal", label: "Open log", action: "log" },
-    updateItem(),
-    { type: "divider" },
-    { type: "normal", label: "Quit Usage Window Starter", action: "quit" },
-  );
-  tray.setMenu(items);
+  if (panel.isVisible()) panelRPC.send.state(panelState());
 }
 
-tray.on("tray-clicked", (event: any) => {
-  const action: string = event.data?.action ?? "";
-  if (action === "check") void scheduler.runDue(true);
-  else if (action.startsWith("start:")) void scheduler.startNow(action.slice(6) as Provider);
-  else if (action === "toggle-auto") {
-    const cfg = loadConfig();
-    cfg.autoStart = !cfg.autoStart;
-    saveConfig(cfg);
-    refreshTray();
-    if (cfg.autoStart) void scheduler.runDue(true);
-  } else if (action === "settings") openSettings();
-  else if (action === "log") Utils.openPath(LOG_FILE);
-  else if (action === "update-check") void updates.check(true);
-  else if (action === "update-install") {
-    scheduler.stop();
-    void updates.install().then(() => scheduler.run()); // only returns if the install failed
+function onPanelAction(a: PanelAction) {
+  switch (a.name) {
+    case "check":
+      void scheduler.runDue(true);
+      break;
+    case "start":
+      void scheduler.startNow(a.provider);
+      break;
+    case "toggleAuto": {
+      const cfg = loadConfig();
+      cfg.autoStart = !cfg.autoStart;
+      saveConfig(cfg);
+      refreshTray();
+      if (cfg.autoStart) void scheduler.runDue(true);
+      break;
+    }
+    case "settings":
+      hidePanel();
+      openSettings();
+      break;
+    case "log":
+      hidePanel();
+      Utils.openPath(LOG_FILE);
+      break;
+    case "updateCheck":
+      void updates.check(true);
+      break;
+    case "updateInstall":
+      hidePanel();
+      scheduler.stop();
+      void updates.install().then(() => scheduler.run()); // only returns if the install failed
+      break;
+    case "quit":
+      scheduler.stop();
+      tray.remove();
+      process.exit(0);
   }
-  else if (action === "quit") {
-    scheduler.stop();
-    tray.remove();
-    process.exit(0);
-  }
+}
+
+// ---- Panel (the dropdown under the menu bar icon) ----
+
+const PANEL_WIDTH = 340;
+let panelHeight = 320;
+/** When the panel last hid on losing focus; a click on the icon itself causes that too. */
+let panelBlurredAt = 0;
+
+const panelRPC = BrowserView.defineRPC<PanelRPC>({
+  maxRequestTime: 10_000,
+  handlers: {
+    requests: { getState: () => panelState() },
+    messages: {
+      action: onPanelAction,
+      resize: ({ height }) => {
+        if (height <= 0 || height === panelHeight) return;
+        panelHeight = height;
+        if (panel.isVisible()) placePanel();
+      },
+      close: () => hidePanel(),
+    },
+  },
+});
+
+const panel = new BrowserWindow({
+  title: "Usage Window Starter",
+  url: "views://panel/index.html",
+  frame: { x: 0, y: 0, width: PANEL_WIDTH, height: panelHeight },
+  titleBarStyle: "hidden",
+  transparent: true,
+  hidden: true,
+  styleMask: { Resizable: false, Closable: false, Miniaturizable: false },
+  rpc: panelRPC,
+});
+panel.setAlwaysOnTop(true);
+panel.on("blur", () => {
+  if (!panel.isVisible()) return;
+  panelBlurredAt = Date.now();
+  hidePanel();
+});
+
+/** Centre the panel under the menu bar icon, kept inside that screen. */
+function placePanel() {
+  const icon = tray.getBounds();
+  const cx = icon.x + icon.width / 2;
+  const display =
+    Screen.getAllDisplays().find((d) => cx >= d.bounds.x && cx < d.bounds.x + d.bounds.width) ??
+    Screen.getPrimaryDisplay();
+  const area = display.workArea;
+  const x = Math.round(Math.min(Math.max(cx - PANEL_WIDTH / 2, area.x + 8), area.x + area.width - PANEL_WIDTH - 8));
+  // Tray bounds come in Cocoa coordinates (origin at the bottom-left of the primary
+  // screen); windows and work areas use a top-left origin.
+  const iconBottom = Screen.getPrimaryDisplay().bounds.height - icon.y;
+  const y = Math.round(iconBottom + 4);
+  panel.setFrame(x, y, PANEL_WIDTH, panelHeight);
+}
+
+function showPanel() {
+  const cfg = loadConfig();
+  if (cfg.refreshOnOpenSec > 0) void scheduler.refresh(cfg.refreshOnOpenSec * 1000);
+  panelRPC.send.state(panelState());
+  placePanel();
+  panel.show();
+  panel.activate();
+}
+
+function hidePanel() {
+  panel.hide();
+}
+
+tray.on("tray-clicked", () => {
+  if (panel.isVisible()) hidePanel();
+  // This click just took focus from the panel and hid it: leave it closed.
+  else if (Date.now() - panelBlurredAt > 300) showPanel();
 });
 
 // ---- Settings window ----
@@ -221,5 +277,6 @@ refreshTray();
 scheduler.run();
 updates.run();
 if (process.env.USAGE_WINDOW_STARTER_OPEN_SETTINGS) openSettings();
+if (process.env.USAGE_WINDOW_STARTER_OPEN_PANEL) setTimeout(showPanel, 1500);
 // Keep the countdown in the menu bar fresh between checks.
 setInterval(refreshTray, 30_000);
