@@ -3,7 +3,7 @@ import type { ElectrobunConfig } from "electrobun";
 export default {
   app: {
     name: "Usage Window Starter",
-    identifier: "dev.usage-window-starter.app",
+    identifier: "dev.foksa.usage-window-starter",
     version: "0.3.4",
   },
   runtime: {

@@ -402,3 +402,16 @@ func TestLoginItemRunsTheAppAndOldOnesAreRewritten(t *testing.T) {
 		t.Fatal("still runs open")
 	}
 }
+
+func TestLoginItemsWithOldNamesAreReplaced(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	_ = os.MkdirAll(agentsDir(), 0o755)
+	old := filepath.Join(agentsDir(), "com.usage-window-starter.login.plist")
+	_ = os.WriteFile(old, []byte("<plist/>"), 0o644)
+	if !MigrateLoginItem("/Applications/Usage Window Starter.app") {
+		t.Fatal("old login item not migrated")
+	}
+	if exists(old) || !IsLaunchAtLogin() {
+		t.Fatal("expected only the new login item")
+	}
+}

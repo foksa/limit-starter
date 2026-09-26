@@ -47,7 +47,7 @@ A dev tool for checking things without the app, for example what the parser sees
 - `~/.usage-window-starter/config.json`: settings (edited by the Settings window)
 - `~/.usage-window-starter/log.jsonl`: one line per check or start
 - `~/.usage-window-starter/state.json`: last snapshot and start time for each provider
-- `~/Library/LaunchAgents/com.usage-window-starter.login.plist`: only when **Launch at login** is on
+- `~/Library/LaunchAgents/dev.foksa.usage-window-starter.login.plist`: only when **Launch at login** is on
 
 If a CLI update changes the `/usage` text, the Claude check fails loudly. No start message is sent, and the menu bar shows `!`. Update `ParseUsage` in `src/go/core/claude.go` and add the new output to `src/go/core/testdata/`.
 

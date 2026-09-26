@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-const loginLabel = "com.usage-window-starter.login"
+const loginLabel = "dev.foksa.usage-window-starter.login"
 
 // legacyLabel is the launchd daemon from the CLI-only version; the menu bar app replaces it.
 const legacyLabel = "com.limit-starter"
@@ -22,7 +22,13 @@ func agentsDir() string {
 func loginPlist() string { return filepath.Join(agentsDir(), loginLabel+".plist") }
 
 // oldLoginPlist is the login item from before the rename; it opens the old .app.
-func oldLoginPlist() string { return filepath.Join(agentsDir(), "com.limit-starter.login.plist") }
+// oldLoginPlists are login items from earlier names; they open the app the old way.
+func oldLoginPlists() []string {
+	return []string{
+		filepath.Join(agentsDir(), "com.limit-starter.login.plist"),
+		filepath.Join(agentsDir(), "com.usage-window-starter.login.plist"),
+	}
+}
 
 func legacyPlist() string { return filepath.Join(agentsDir(), legacyLabel+".plist") }
 
@@ -45,7 +51,7 @@ var xmlEscape = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;")
 
 // BundleID is the app's bundle identifier; macOS uses it to show the login item
 // under the app's name.
-const BundleID = "dev.usage-window-starter.app"
+const BundleID = "dev.foksa.usage-window-starter"
 
 // loginPlistXML runs the app's own executable rather than /usr/bin/open: macOS
 // names a login item after the program it runs, so with `open` the "background
@@ -112,14 +118,17 @@ func RemoveLegacyDaemon() bool {
 	return true
 }
 
-// MigrateLoginItem swaps the pre-rename login item for one that opens this app.
+// MigrateLoginItem replaces a login item with an earlier name by the current one.
 func MigrateLoginItem(appPath string) bool {
-	if !exists(oldLoginPlist()) {
-		return false
+	found := false
+	for _, p := range oldLoginPlists() {
+		if exists(p) {
+			found = true
+			_ = os.Remove(p)
+		}
 	}
-	_ = os.Remove(oldLoginPlist())
-	if appPath != "" {
+	if found && appPath != "" {
 		_ = SetLaunchAtLogin(true, appPath)
 	}
-	return true
+	return found
 }

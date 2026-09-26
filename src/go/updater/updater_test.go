@@ -7,11 +7,11 @@ import (
 )
 
 func testUpdater() *Updater {
-	return &Updater{Info: LocalInfo{Identifier: "dev.usage-window-starter.app", Channel: "stable", Hash: "aaaa"}}
+	return &Updater{Info: LocalInfo{Identifier: "dev.foksa.usage-window-starter", Channel: "stable", Hash: "aaaa"}}
 }
 
 func goodManifest() Manifest {
-	m := Manifest{SchemaVersion: 1, Identifier: "dev.usage-window-starter.app", Channel: "stable", Version: "0.3.0",
+	m := Manifest{SchemaVersion: 1, Identifier: "dev.foksa.usage-window-starter", Channel: "stable", Version: "0.3.0",
 		Hash: "bbbb", Platform: goOS(), Arch: goArch()}
 	m.Artifact.File = "stable-" + goOS() + "-" + goArch() + "-UsageWindowStarter.app.tar.zst"
 	return m
@@ -119,7 +119,7 @@ func TestNewResultIgnoresMalformedFiles(t *testing.T) {
 	_ = os.MkdirAll(root, 0o755)
 	name := filepath.Join(root, ".electrobun-update-0123456789abcdef0123456789abcdef.result.json")
 	// success doesn't match phase, and an extra field
-	_ = os.WriteFile(name, []byte(`{"schema_version":1,"transaction_id":"0123456789abcdef0123456789abcdef","success":true,"phase":"swapping","message":"x","identifier":"dev.usage-window-starter.app","channel":"stable","version":"0.3.0","hash":"bbbb","extra":1}`), 0o644)
+	_ = os.WriteFile(name, []byte(`{"schema_version":1,"transaction_id":"0123456789abcdef0123456789abcdef","success":true,"phase":"swapping","message":"x","identifier":"dev.foksa.usage-window-starter","channel":"stable","version":"0.3.0","hash":"bbbb","extra":1}`), 0o644)
 	if r, err := u.NewResult(); r != nil || err != nil {
 		t.Fatalf("%+v %v", r, err)
 	}
